@@ -111,14 +111,14 @@ export default function ReportSection({
   )
   const [error, setError] = useState('')
 
-  async function handleGenerate(selectedEventIds: string[], wordCount: number) {
+  async function handleGenerate(selectedEventIds: string[], length: string) {
     setPhase({ type: 'generating' })
     setError('')
     try {
       const res = await fetch('/api/reports/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, selectedEventIds, wordCount }),
+        body: JSON.stringify({ studentId, selectedEventIds, length }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -129,7 +129,7 @@ export default function ReportSection({
     }
   }
 
-  async function handleRegenerate(focusInstruction: string, selectedEventIds: string[], wordCount: number) {
+  async function handleRegenerate(focusInstruction: string, selectedEventIds: string[], length: string) {
     const previousReport = phase.type === 'confirm-regenerate' ? phase.report : null
     setPhase({ type: 'generating' })
     setError('')
@@ -137,7 +137,7 @@ export default function ReportSection({
       const res = await fetch('/api/reports/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, selectedEventIds, previousContent: previousReport?.content, focusInstruction, wordCount }),
+        body: JSON.stringify({ studentId, selectedEventIds, previousContent: previousReport?.content, focusInstruction, length }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)

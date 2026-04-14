@@ -26,13 +26,16 @@ const SUBJECT_PALETTE = [
   { dot: 'bg-pink-600',    pill: 'bg-pink-100 text-pink-800 border border-pink-200' },
 ]
 
-const COLUMNS: { sentiment: Sentiment; label: string; Icon: React.ElementType; headerClass: string; addClass: string }[] = [
+const COLUMNS: { sentiment: Sentiment; label: string; Icon: React.ElementType; headerClass: string; addClass: string; cardBg: string; cardBorder: string; iconClass: string }[] = [
   {
     sentiment: 'positive',
     label: 'Positive',
     Icon: ThumbsUp,
     headerClass: 'bg-emerald-50 border-emerald-200 text-emerald-700',
     addClass: 'text-emerald-700 hover:bg-emerald-50 border-emerald-200',
+    cardBg: 'bg-emerald-50',
+    cardBorder: 'border-emerald-200',
+    iconClass: 'text-emerald-500',
   },
   {
     sentiment: 'neutral',
@@ -40,6 +43,9 @@ const COLUMNS: { sentiment: Sentiment; label: string; Icon: React.ElementType; h
     Icon: Minus,
     headerClass: 'bg-amber-50 border-amber-200 text-amber-700',
     addClass: 'text-amber-700 hover:bg-amber-50 border-amber-200',
+    cardBg: 'bg-amber-50/80',
+    cardBorder: 'border-amber-200',
+    iconClass: 'text-amber-500',
   },
   {
     sentiment: 'negative',
@@ -47,6 +53,9 @@ const COLUMNS: { sentiment: Sentiment; label: string; Icon: React.ElementType; h
     Icon: ThumbsDown,
     headerClass: 'bg-red-50 border-red-200 text-red-700',
     addClass: 'text-red-700 hover:bg-red-50 border-red-200',
+    cardBg: 'bg-red-50',
+    cardBorder: 'border-red-200',
+    iconClass: 'text-red-400',
   },
 ]
 
@@ -110,12 +119,16 @@ export default function TrelloEventBoard({ events, subjects, studentId, studentN
                   const subColor = event.subject_id
                     ? (subjectColorMap[event.subject_id] ?? SUBJECT_PALETTE[7])
                     : SUBJECT_PALETTE[7]
+                  const ColIcon = col.Icon
                   return (
                     <div
                       key={event.id}
                       onClick={() => setModalState({ existingEvent: event })}
-                      className="bg-white rounded-lg border border-[#DFE1E6] shadow-sm p-3 group hover:shadow-md hover:border-[#0052CC]/30 transition-all cursor-pointer"
+                      className={`relative rounded-lg border shadow-sm p-3 group hover:shadow-md transition-all cursor-pointer ${col.cardBg} ${col.cardBorder}`}
                     >
+                      {/* Sentiment icon — top-right corner */}
+                      <ColIcon size={12} className={`absolute top-2.5 right-2.5 ${col.iconClass} opacity-60`} />
+
                       {/* Subject pill */}
                       {event.subjects && (
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold mb-2 ${subColor.pill}`}>

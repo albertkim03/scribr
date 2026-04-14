@@ -7,7 +7,7 @@ import type { Event, Subject, Sentiment } from '@/types'
 interface Props {
   events: Event[]
   subjects: Subject[]
-  onRegenerate: (instruction: string, selectedEventIds: string[], wordCount: number) => void
+  onRegenerate: (instruction: string, selectedEventIds: string[], length: string) => void
   onClose: () => void
 }
 
@@ -20,10 +20,10 @@ const PRESETS = [
   { label: 'Different wording',  instruction: 'Rewrite this report using completely different wording and sentence structures, while keeping the same facts.' },
 ]
 
-const WORD_COUNT_OPTIONS = [
-  { label: 'Brief', value: 150, desc: '~150 words' },
-  { label: 'Standard', value: 300, desc: '~300 words' },
-  { label: 'Detailed', value: 500, desc: '~500 words' },
+const LENGTH_OPTIONS = [
+  { label: 'Brief',    value: 'brief' },
+  { label: 'Standard', value: 'standard' },
+  { label: 'Detailed', value: 'detailed' },
 ]
 
 const SUBJECT_PALETTE = [
@@ -51,7 +51,7 @@ export default function RegenerateModal({ events, subjects, onRegenerate, onClos
   const [instruction, setInstruction] = useState('')
   const [activePreset, setActivePreset] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(events.map(e => e.id)))
-  const [wordCount, setWordCount] = useState(300)
+  const [length, setLength] = useState('standard')
   const [showEvents, setShowEvents] = useState(false)
 
   const subjectColorMap: Record<string, typeof SUBJECT_PALETTE[0]> = {}
@@ -76,7 +76,7 @@ export default function RegenerateModal({ events, subjects, onRegenerate, onClos
   function handleSubmit() {
     const trimmed = instruction.trim()
     if (!trimmed) return
-    onRegenerate(trimmed, [...selectedIds], wordCount)
+    onRegenerate(trimmed, [...selectedIds], length)
     // Do NOT call onClose() — parent's phase transition dismisses this modal
   }
 
@@ -224,21 +224,18 @@ export default function RegenerateModal({ events, subjects, onRegenerate, onClos
             <div>
               <p className="text-xs font-bold text-[#42526E] uppercase tracking-wide mb-2">Report length</p>
               <div className="flex gap-2">
-                {WORD_COUNT_OPTIONS.map(opt => (
+                {LENGTH_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => setWordCount(opt.value)}
+                    onClick={() => setLength(opt.value)}
                     className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all btn-press-subtle ${
-                      wordCount === opt.value
+                      length === opt.value
                         ? 'bg-[#0052CC] text-white border-[#0052CC]'
                         : 'bg-white text-[#42526E] border-[#DFE1E6] hover:border-[#0052CC] hover:text-[#0052CC]'
                     }`}
                   >
                     {opt.label}
-                    <span className={`block text-[10px] font-normal mt-0.5 ${wordCount === opt.value ? 'text-blue-200' : 'text-[#6B778C]'}`}>
-                      {opt.desc}
-                    </span>
                   </button>
                 ))}
               </div>

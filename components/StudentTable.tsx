@@ -38,6 +38,12 @@ const SENTIMENT_CONFIG: Record<Sentiment, { Icon: React.ElementType; label: stri
   negative: { Icon: ThumbsDown, label: 'Negative', classes: 'bg-red-50 text-red-700 border border-red-200' },
 }
 
+const SENTIMENT_CARD: Record<Sentiment, { bg: string; border: string; iconClass: string }> = {
+  positive: { bg: 'bg-emerald-50',  border: 'border-emerald-200', iconClass: 'text-emerald-500' },
+  neutral:  { bg: 'bg-amber-50/80', border: 'border-amber-200',   iconClass: 'text-amber-500' },
+  negative: { bg: 'bg-red-50',      border: 'border-red-200',     iconClass: 'text-red-400' },
+}
+
 type EventSortKey = 'newest' | 'oldest' | 'subject' | 'sentiment'
 
 const EVENT_SORT_OPTIONS = [
@@ -411,40 +417,43 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                         const subColor = event.subject_id
                           ? (subjectColorMap[event.subject_id] ?? FALLBACK_COLOR)
                           : FALLBACK_COLOR
-                        const sentiment = SENTIMENT_CONFIG[event.sentiment]
-                        const SentimentIcon = sentiment.Icon
+                        const { Icon: SentimentIcon } = SENTIMENT_CONFIG[event.sentiment]
+                        const cardStyle = SENTIMENT_CARD[event.sentiment]
                         return (
                           <div
                             key={event.id}
                             onClick={() => setEditingEvent({ event, student })}
-                            className="flex items-start gap-3 bg-white rounded-lg border border-[#DFE1E6] px-3 py-2.5 cursor-pointer hover:border-[#0052CC]/30 hover:shadow-sm transition-all"
+                            className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 cursor-pointer hover:shadow-sm transition-all ${cardStyle.bg} ${cardStyle.border}`}
                           >
-                            <div className="flex items-center gap-1.5 shrink-0 flex-wrap pt-0.5">
-                              {event.subjects && (
+                            {/* Subject badge */}
+                            <div className="shrink-0 pt-0.5">
+                              {event.subjects ? (
                                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${subColor.pill}`}>
                                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${subColor.dot}`} />
                                   {event.subjects.name}
                                 </span>
+                              ) : (
+                                <span className="inline-block w-2" />
                               )}
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${sentiment.classes}`}>
-                                <SentimentIcon size={10} />
-                                {sentiment.label}
-                              </span>
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-xs text-[#172B4D] leading-relaxed">{event.description}</p>
                               <p className="text-xs text-[#6B778C] mt-0.5">{formatDate(event.created_at)}</p>
                             </div>
-                            <button
-                              onClick={e => handleDeleteEvent(e, event.id)}
-                              disabled={deletingEventId === event.id}
-                              className="p-2 text-[#6B778C] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors btn-press-subtle disabled:opacity-40 shrink-0"
-                            >
-                              {deletingEventId === event.id
-                                ? <Loader2 size={13} className="animate-spin" />
-                                : <X size={13} />
-                              }
-                            </button>
+                            {/* Sentiment icon + delete */}
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              <SentimentIcon size={12} className={`${cardStyle.iconClass} opacity-60`} />
+                              <button
+                                onClick={e => handleDeleteEvent(e, event.id)}
+                                disabled={deletingEventId === event.id}
+                                className="p-2 text-[#6B778C] hover:text-red-600 hover:bg-red-50/80 rounded-lg transition-colors btn-press-subtle disabled:opacity-40"
+                              >
+                                {deletingEventId === event.id
+                                  ? <Loader2 size={13} className="animate-spin" />
+                                  : <X size={13} />
+                                }
+                              </button>
+                            </div>
                           </div>
                         )
                       })}
@@ -470,25 +479,23 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                           const subColor = event.subject_id
                             ? (subjectColorMap[event.subject_id] ?? FALLBACK_COLOR)
                             : FALLBACK_COLOR
-                          const sentiment = SENTIMENT_CONFIG[event.sentiment]
-                          const SentimentIcon = sentiment.Icon
+                          const { Icon: SentimentIcon } = SENTIMENT_CONFIG[event.sentiment]
+                          const cardStyle = SENTIMENT_CARD[event.sentiment]
                           return (
                             <div
                               key={event.id}
                               onClick={() => setEditingEvent({ event, student })}
-                              className="bg-white rounded-lg border border-[#DFE1E6] p-2.5 cursor-pointer hover:border-[#0052CC]/30 hover:shadow-sm transition-all"
+                              className={`relative rounded-lg border p-2.5 cursor-pointer hover:shadow-sm transition-all ${cardStyle.bg} ${cardStyle.border}`}
                             >
-                              <div className="flex items-center gap-1 flex-wrap mb-1">
-                                {event.subjects && (
-                                  <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold ${subColor.pill}`}>
-                                    <span className={`w-1 h-1 rounded-full shrink-0 ${subColor.dot}`} />
-                                    {event.subjects.name}
-                                  </span>
-                                )}
-                                <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold ${sentiment.classes}`}>
-                                  <SentimentIcon size={9} />
+                              {/* Sentiment icon — top-right corner */}
+                              <SentimentIcon size={10} className={`absolute top-2 right-2 ${cardStyle.iconClass} opacity-60`} />
+
+                              {event.subjects && (
+                                <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold mb-1 ${subColor.pill}`}>
+                                  <span className={`w-1 h-1 rounded-full shrink-0 ${subColor.dot}`} />
+                                  {event.subjects.name}
                                 </span>
-                              </div>
+                              )}
                               <p className="text-xs text-[#172B4D] leading-relaxed line-clamp-2">{event.description}</p>
                               <p className="text-xs text-[#6B778C] mt-0.5">{formatDate(event.created_at)}</p>
                             </div>

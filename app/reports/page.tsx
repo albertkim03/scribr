@@ -10,7 +10,7 @@ export default async function ReportsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [reportsResult, subjectsResult] = await Promise.all([
+  const [reportsResult, subjectsResult, studentsResult] = await Promise.all([
     supabase
       .from('reports')
       .select('*, students(first_name, last_name, gender, class_id, classes(name), events(*, subjects(*)))')
@@ -20,7 +20,16 @@ export default async function ReportsPage() {
       .from('subjects')
       .select('*')
       .order('name'),
+    supabase
+      .from('students')
+      .select('id, first_name, last_name, class_id, classes(name)')
+      .eq('user_id', user.id)
+      .order('last_name'),
   ])
+
+  const reportedIds = new Set((reportsResult.data ?? []).map((r: { student_id: string }) => r.student_id))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const studentsWithoutReport = (studentsResult.data ?? []).filter((s: any) => !reportedIds.has(s.id)) as any[]
 
   return (
     <>
@@ -29,6 +38,7 @@ export default async function ReportsPage() {
         <AllReportsView
           reports={reportsResult.data ?? []}
           subjects={subjectsResult.data ?? []}
+          studentsWithoutReport={studentsWithoutReport}
         />
       </main>
     </>

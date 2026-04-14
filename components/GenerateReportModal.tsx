@@ -4,17 +4,17 @@ import { useState } from 'react'
 import { X, Sparkles, ThumbsUp, Minus, ThumbsDown, Check } from 'lucide-react'
 import type { Event, Subject, Sentiment } from '@/types'
 
-const WORD_COUNT_OPTIONS = [
-  { label: 'Brief', value: 150, desc: '~150 words' },
-  { label: 'Standard', value: 300, desc: '~300 words' },
-  { label: 'Detailed', value: 500, desc: '~500 words' },
+const LENGTH_OPTIONS = [
+  { label: 'Brief',    value: 'brief' },
+  { label: 'Standard', value: 'standard' },
+  { label: 'Detailed', value: 'detailed' },
 ]
 
 interface Props {
   studentName: string
   events: Event[]
   subjects: Subject[]
-  onGenerate: (selectedEventIds: string[], wordCount: number) => void
+  onGenerate: (selectedEventIds: string[], length: string) => void
   onClose: () => void
 }
 
@@ -41,7 +41,7 @@ function formatDate(d: string) {
 
 export default function GenerateReportModal({ studentName, events, subjects, onGenerate, onClose }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(events.map(e => e.id)))
-  const [wordCount, setWordCount] = useState(300)
+  const [length, setLength] = useState('standard')
 
   const subjectColorMap: Record<string, typeof SUBJECT_PALETTE[0]> = {}
   subjects.forEach((s, i) => { subjectColorMap[s.id] = SUBJECT_PALETTE[i % SUBJECT_PALETTE.length] })
@@ -65,7 +65,7 @@ export default function GenerateReportModal({ studentName, events, subjects, onG
 
   function handleGenerate() {
     if (selectedIds.size === 0) return
-    onGenerate([...selectedIds], wordCount)
+    onGenerate([...selectedIds], length)
     // Do NOT call onClose() — parent's phase transition dismisses this modal
   }
 
@@ -174,21 +174,18 @@ export default function GenerateReportModal({ studentName, events, subjects, onG
           <div>
             <p className="text-xs font-bold text-[#42526E] uppercase tracking-wide mb-2">Report length</p>
             <div className="flex gap-2">
-              {WORD_COUNT_OPTIONS.map(opt => (
+              {LENGTH_OPTIONS.map(opt => (
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setWordCount(opt.value)}
+                  onClick={() => setLength(opt.value)}
                   className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all btn-press-subtle ${
-                    wordCount === opt.value
+                    length === opt.value
                       ? 'bg-[#0052CC] text-white border-[#0052CC]'
                       : 'bg-white text-[#42526E] border-[#DFE1E6] hover:border-[#0052CC] hover:text-[#0052CC]'
                   }`}
                 >
                   {opt.label}
-                  <span className={`block text-[10px] font-normal mt-0.5 ${wordCount === opt.value ? 'text-blue-200' : 'text-[#6B778C]'}`}>
-                    {opt.desc}
-                  </span>
                 </button>
               ))}
             </div>

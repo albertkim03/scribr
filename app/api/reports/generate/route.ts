@@ -7,7 +7,7 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { studentId, selectedEventIds, previousContent, focusInstruction, wordCount = 300 } = await request.json()
+  const { studentId, selectedEventIds, previousContent, focusInstruction, length = 'standard' } = await request.json()
   if (!studentId) return NextResponse.json({ error: 'Missing studentId' }, { status: 400 })
 
   // Fetch student
@@ -75,7 +75,14 @@ export async function POST(request: Request) {
 
   const isRevision = !!cleanPreviousContent
 
-  const sharedRules = `Output ONLY the report text. Do not start with "Here is..." or any introductory phrase. Begin directly with the student's first name. Write approximately ${wordCount} words total. Do not use em dashes (—) — use commas or restructure sentences instead. Use plain text paragraphs separated by blank lines. Do not use HTML tags, markdown, bullet points, or headings.`
+  const lengthGuidance: Record<string, string> = {
+    brief: 'Write a brief, concise report — keep it short and to the point.',
+    standard: 'Write a report of standard length — balanced and thorough.',
+    detailed: 'Write a detailed, comprehensive report — cover each area in depth with rich descriptions.',
+  }
+  const lengthRule = lengthGuidance[length] ?? lengthGuidance.standard
+
+  const sharedRules = `Output ONLY the report text. Do not start with "Here is..." or any introductory phrase. Begin directly with the student's first name. ${lengthRule} Do not use em dashes (—) — use commas or restructure sentences instead. Use plain text paragraphs separated by blank lines. Do not use HTML tags, markdown, bullet points, or headings.`
 
   const prompt = isRevision
     ? `You are revising an existing student report for a teacher.
