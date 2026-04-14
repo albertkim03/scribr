@@ -4,11 +4,17 @@ import { useState } from 'react'
 import { X, Sparkles, ThumbsUp, Minus, ThumbsDown, Check } from 'lucide-react'
 import type { Event, Subject, Sentiment } from '@/types'
 
+const WORD_COUNT_OPTIONS = [
+  { label: 'Brief', value: 150, desc: '~150 words' },
+  { label: 'Standard', value: 300, desc: '~300 words' },
+  { label: 'Detailed', value: 500, desc: '~500 words' },
+]
+
 interface Props {
   studentName: string
   events: Event[]
   subjects: Subject[]
-  onGenerate: (selectedEventIds: string[]) => void
+  onGenerate: (selectedEventIds: string[], wordCount: number) => void
   onClose: () => void
 }
 
@@ -35,6 +41,7 @@ function formatDate(d: string) {
 
 export default function GenerateReportModal({ studentName, events, subjects, onGenerate, onClose }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(events.map(e => e.id)))
+  const [wordCount, setWordCount] = useState(300)
 
   const subjectColorMap: Record<string, typeof SUBJECT_PALETTE[0]> = {}
   subjects.forEach((s, i) => { subjectColorMap[s.id] = SUBJECT_PALETTE[i % SUBJECT_PALETTE.length] })
@@ -58,7 +65,7 @@ export default function GenerateReportModal({ studentName, events, subjects, onG
 
   function handleGenerate() {
     if (selectedIds.size === 0) return
-    onGenerate([...selectedIds])
+    onGenerate([...selectedIds], wordCount)
     // Do NOT call onClose() — parent's phase transition dismisses this modal
   }
 
@@ -162,23 +169,48 @@ export default function GenerateReportModal({ studentName, events, subjects, onG
         )}
 
         {/* Footer */}
-        <div className="shrink-0 px-4 py-4 border-t border-[#DFE1E6] flex items-center justify-between gap-3 bg-white rounded-b-2xl">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-[#DFE1E6] rounded-lg text-sm font-semibold text-[#42526E] hover:bg-[#F4F5F7] transition-colors btn-press-subtle"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleGenerate}
-            disabled={noneSelected}
-            className="flex items-center gap-2 bg-white border border-purple-200 px-6 py-2 rounded-lg text-sm font-bold hover:border-purple-400 hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition-all btn-press"
-          >
-            <Sparkles size={14} className="text-violet-500" />
-            <span className="bg-gradient-to-r from-violet-500 via-blue-500 to-cyan-500 bg-clip-text text-transparent">
-              Generate with {selectedIds.size} event{selectedIds.size !== 1 ? 's' : ''}
-            </span>
-          </button>
+        <div className="shrink-0 px-4 py-4 border-t border-[#DFE1E6] bg-white rounded-b-2xl space-y-3">
+          {/* Word count selector */}
+          <div>
+            <p className="text-xs font-bold text-[#42526E] uppercase tracking-wide mb-2">Report length</p>
+            <div className="flex gap-2">
+              {WORD_COUNT_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setWordCount(opt.value)}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all btn-press-subtle ${
+                    wordCount === opt.value
+                      ? 'bg-[#0052CC] text-white border-[#0052CC]'
+                      : 'bg-white text-[#42526E] border-[#DFE1E6] hover:border-[#0052CC] hover:text-[#0052CC]'
+                  }`}
+                >
+                  {opt.label}
+                  <span className={`block text-[10px] font-normal mt-0.5 ${wordCount === opt.value ? 'text-blue-200' : 'text-[#6B778C]'}`}>
+                    {opt.desc}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 border border-[#DFE1E6] rounded-lg text-sm font-semibold text-[#42526E] hover:bg-[#F4F5F7] transition-colors btn-press-subtle"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleGenerate}
+              disabled={noneSelected}
+              className="flex-1 flex items-center justify-center gap-2 bg-white border border-purple-200 px-6 py-2 rounded-lg text-sm font-bold hover:border-purple-400 hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition-all btn-press"
+            >
+              <Sparkles size={14} className="text-violet-500" />
+              <span className="bg-gradient-to-r from-violet-500 via-blue-500 to-cyan-500 bg-clip-text text-transparent">
+                Generate with {selectedIds.size} event{selectedIds.size !== 1 ? 's' : ''}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

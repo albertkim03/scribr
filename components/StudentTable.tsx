@@ -5,13 +5,14 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   ChevronRight, Plus, Search,
-  Trash2, ThumbsUp, Minus, ThumbsDown,
+  ThumbsUp, Minus, ThumbsDown,
   GraduationCap, X, Loader2, Sparkles,
 } from 'lucide-react'
 import AddStudentModal from './AddStudentModal'
 import AddEventModal from './AddEventModal'
 import ReportSection from './ReportSection'
 import Select from './Select'
+import ConfirmModal from './ConfirmModal'
 import type { StudentWithStats, Subject, Class, Event, Sentiment, Report } from '@/types'
 
 function formatDate(d: string) {
@@ -116,6 +117,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
   const [editingEvent, setEditingEvent] = useState<{ event: Event; student: StudentWithStats } | null>(null)
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null)
   const [deletingStudentId, setDeletingStudentId] = useState<string | null>(null)
+  const [confirmModal, setConfirmModal] = useState<{ message: string; confirmLabel?: string; onConfirm: () => void } | null>(null)
 
   // Subject color map
   const subjectColorMap: Record<string, typeof SUBJECT_PALETTE[0]> = {}
@@ -160,22 +162,34 @@ export default function StudentTable({ students, subjects, classes }: Props) {
     })
   }
 
-  async function handleDeleteEvent(e: React.MouseEvent, eventId: string) {
+  function handleDeleteEvent(e: React.MouseEvent, eventId: string) {
     e.stopPropagation()
-    if (!confirm('Delete this event?')) return
-    setDeletingEventId(eventId)
-    await supabase.from('events').delete().eq('id', eventId)
-    setDeletingEventId(null)
-    router.refresh()
+    setConfirmModal({
+      message: 'Delete this event? This cannot be undone.',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        setConfirmModal(null)
+        setDeletingEventId(eventId)
+        await supabase.from('events').delete().eq('id', eventId)
+        setDeletingEventId(null)
+        router.refresh()
+      },
+    })
   }
 
-  async function handleDeleteStudent(e: React.MouseEvent, studentId: string, name: string) {
+  function handleDeleteStudent(e: React.MouseEvent, studentId: string, name: string) {
     e.stopPropagation()
-    if (!confirm(`Delete ${name}? This will permanently remove all their events and report.`)) return
-    setDeletingStudentId(studentId)
-    await supabase.from('students').delete().eq('id', studentId)
-    setDeletingStudentId(null)
-    router.refresh()
+    setConfirmModal({
+      message: `Delete ${name}? This will permanently remove all their events and report.`,
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        setConfirmModal(null)
+        setDeletingStudentId(studentId)
+        await supabase.from('students').delete().eq('id', studentId)
+        setDeletingStudentId(null)
+        router.refresh()
+      },
+    })
   }
 
   const filtered = students.filter(s => {
@@ -304,7 +318,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                 {/* ── Header ─────────────────────────────── */}
                 <div
                   className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-[#F4F5F7] transition-colors select-none"
-                  onClick={() => isPanelOpen ? undefined : toggleExpand(student.id)}
+                  onClick={() => isPanelOpen ? setReportPanelId(null) : toggleExpand(student.id)}
                 >
                   <ChevronRight
                     size={15}
@@ -362,12 +376,12 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                     <button
                       onClick={e => handleDeleteStudent(e, student.id, `${student.first_name} ${student.last_name}`)}
                       disabled={deletingStudentId === student.id}
-                      className="p-1.5 text-[#6B778C] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors btn-press-subtle disabled:opacity-40"
+                      className="p-2 text-[#6B778C] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors btn-press-subtle disabled:opacity-40"
                       title="Delete student"
                     >
                       {deletingStudentId === student.id
-                        ? <Loader2 size={13} className="animate-spin" />
-                        : <Trash2 size={13} />
+                        ? <Loader2 size={14} className="animate-spin" />
+                        : <X size={14} />
                       }
                     </button>
                   </div>
@@ -390,6 +404,9 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                     )}
 
                     <div className="space-y-2">
+                      {/* Ghost cell at top */}
+                      <AddEventGhostCell onClick={() => setAddEventStudent(student)} />
+
                       {sortedEvents.map(event => {
                         const subColor = event.subject_id
                           ? (subjectColorMap[event.subject_id] ?? FALLBACK_COLOR)
@@ -421,16 +438,16 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                             <button
                               onClick={e => handleDeleteEvent(e, event.id)}
                               disabled={deletingEventId === event.id}
-                              className="p-1.5 text-[#6B778C] hover:text-red-600 hover:bg-red-50 rounded transition-colors btn-press-subtle disabled:opacity-40 shrink-0"
+                              className="p-2 text-[#6B778C] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors btn-press-subtle disabled:opacity-40 shrink-0"
                             >
-                              <Trash2 size={12} />
+                              {deletingEventId === event.id
+                                ? <Loader2 size={13} className="animate-spin" />
+                                : <X size={13} />
+                              }
                             </button>
                           </div>
                         )
                       })}
-
-                      {/* Ghost cell for adding event */}
-                      <AddEventGhostCell onClick={() => setAddEventStudent(student)} />
                     </div>
                   </div>
                 )}
@@ -446,6 +463,9 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                         </span>
                       </div>
                       <div className="p-2 space-y-1.5 flex-1">
+                        {/* Ghost cell at top */}
+                        <AddEventGhostCell onClick={() => setAddEventStudent(student)} compact />
+
                         {sortedEvents.map(event => {
                           const subColor = event.subject_id
                             ? (subjectColorMap[event.subject_id] ?? FALLBACK_COLOR)
@@ -474,8 +494,6 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                             </div>
                           )
                         })}
-                        {/* Ghost cell */}
-                        <AddEventGhostCell onClick={() => setAddEventStudent(student)} compact />
                       </div>
                     </div>
 
@@ -509,6 +527,14 @@ export default function StudentTable({ students, subjects, classes }: Props) {
           subjects={subjects}
           existingEvent={editingEvent.event}
           onClose={() => setEditingEvent(null)}
+        />
+      )}
+      {confirmModal && (
+        <ConfirmModal
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
         />
       )}
     </>

@@ -7,7 +7,7 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { studentId, selectedEventIds, previousContent, focusInstruction } = await request.json()
+  const { studentId, selectedEventIds, previousContent, focusInstruction, wordCount = 300 } = await request.json()
   if (!studentId) return NextResponse.json({ error: 'Missing studentId' }, { status: 400 })
 
   // Fetch student
@@ -68,17 +68,25 @@ export async function POST(request: Request) {
     ? `\n[TEACHER NOTES]: ${student.profile_notes.trim()}\n`
     : ''
 
-  const isRevision = !!previousContent
+  // Strip any HTML tags from previousContent before including in prompt
+  const cleanPreviousContent = previousContent
+    ? previousContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    : null
+
+  const isRevision = !!cleanPreviousContent
+
+  const sharedRules = `Output ONLY the report text. Do not start with "Here is..." or any introductory phrase. Begin directly with the student's first name. Write approximately ${wordCount} words total. Do not use em dashes (—) — use commas or restructure sentences instead. Use plain text paragraphs separated by blank lines. Do not use HTML tags, markdown, bullet points, or headings.`
 
   const prompt = isRevision
     ? `You are revising an existing student report for a teacher.
 
 [PREVIOUS REPORT]:
-${previousContent}
+${cleanPreviousContent}
 
 [TEACHER INSTRUCTION]: ${focusInstruction || 'Improve and refine this report.'}
 
-Using the observations below (${events.length} events), rewrite the report according to the teacher's instruction. Keep it professional, in third person using the student's first name, in prose paragraphs without headings or bullet points. Make meaningful changes — do not simply repeat the previous version.
+Using the observations below (${events.length} events), rewrite the report according to the teacher's instruction. Keep it professional, in third person using the student's first name. Make meaningful changes — do not simply repeat the previous version.
+${sharedRules}
 ${profileContext}
 [STUDENT NAME]: ${student.first_name} ${student.last_name}
 [GENDER]: ${student.gender}
@@ -86,9 +94,8 @@ ${profileContext}
 ${sections.join('\n\n')}`
     : `You are assisting a teacher in writing an end-of-year student report.
 Below are observations logged throughout the year, grouped by subject.
-Write a professional, balanced, and encouraging report in prose.
-Do not use bullet points. Write in third person using the student's first name.
-Each subject should have its own paragraph. Do not include headings.
+Write a professional, balanced, and encouraging report in prose. Write in third person using the student's first name. Each subject should have its own paragraph.
+${sharedRules}
 ${profileContext}
 [STUDENT NAME]: ${student.first_name} ${student.last_name}
 [GENDER]: ${student.gender}

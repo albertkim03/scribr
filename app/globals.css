@@ -1,19 +1,37 @@
 @import "tailwindcss";
 
 :root {
-  --background: #F4F5F7;
+  --bg-page: #EEF2FF;
   --foreground: #172B4D;
+
+  /* Card shadows */
+  --shadow-card: 0 1px 3px rgba(10, 31, 74, 0.08), 0 4px 14px rgba(10, 31, 74, 0.05);
+  --shadow-card-hover: 0 2px 8px rgba(0, 82, 204, 0.12), 0 6px 20px rgba(10, 31, 74, 0.08);
+  --shadow-modal: 0 8px 32px rgba(10, 31, 74, 0.18), 0 2px 8px rgba(10, 31, 74, 0.1);
 }
 
 body {
-  background: var(--background);
+  background: linear-gradient(160deg, #EEF2FF 0%, #E8EFFE 45%, #F0F5FF 100%);
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
 }
 
 button, [role="button"] {
   cursor: pointer;
+}
+
+/* ── Card elevation ──────────────────────────────────────── */
+.card {
+  background: #fff;
+  border-radius: 0.75rem;
+  border: 1px solid #DFE1E6;
+  box-shadow: var(--shadow-card);
+}
+.card:hover {
+  box-shadow: var(--shadow-card-hover);
 }
 
 /* ── Button press effects ────────────────────────────────── */
@@ -22,7 +40,7 @@ button, [role="button"] {
 }
 .btn-press:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 82, 204, 0.25);
+  box-shadow: 0 4px 14px rgba(0, 82, 204, 0.28);
 }
 .btn-press:active {
   transform: translateY(0) scale(0.96);
@@ -34,6 +52,22 @@ button, [role="button"] {
 }
 .btn-press-subtle:active {
   transform: scale(0.95);
+}
+
+/* ── Primary button gradient ─────────────────────────────── */
+.btn-primary {
+  background: linear-gradient(135deg, #0052CC, #1B4DD6);
+  color: #fff;
+  border: none;
+  transition: all 100ms ease;
+}
+.btn-primary:hover {
+  background: linear-gradient(135deg, #0065FF, #2860E8);
+  box-shadow: 0 4px 14px rgba(0, 82, 204, 0.35);
+  transform: translateY(-1px);
+}
+.btn-primary:active {
+  transform: scale(0.97);
 }
 
 /* ── TipTap editor ───────────────────────────────────────── */
@@ -98,6 +132,12 @@ button, [role="button"] {
   text-decoration-thickness: 2px;
   text-underline-offset: 3px;
   animation: refactor-flash-fade 5s ease-out forwards;
+}
+
+/* ── Auth page background ────────────────────────────────── */
+.auth-bg {
+  background: linear-gradient(145deg, #060E1C 0%, #0A1F4A 35%, #0F3482 65%, #1B5BE8 100%);
+  min-height: 100vh;
 }
 
 /* ── Print ───────────────────────────────────────────────── */

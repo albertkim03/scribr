@@ -7,16 +7,19 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { selectedText, instruction } = await request.json()
+  const { selectedText, instruction, fullContent } = await request.json()
   if (!selectedText || !instruction) {
     return NextResponse.json({ error: 'Missing selectedText or instruction' }, { status: 400 })
   }
 
-  const prompt = `You are editing a student report written by a teacher. Rewrite only the text provided below according to the instruction. Return only the rewritten text — no preamble, no quotes, no explanation.
+  const contextBlock = fullContent
+    ? `\n\nFull report context (for reference — do not rewrite this, use it to understand tone and content):\n${fullContent}\n`
+    : ''
 
+  const prompt = `You are editing a student report written by a teacher. Rewrite ONLY the selected text below according to the instruction. Return only the rewritten text — no preamble, no quotes, no explanation.${contextBlock}
 Instruction: ${instruction}
 
-Text to rewrite:
+Selected text to rewrite:
 ${selectedText}`
 
   try {

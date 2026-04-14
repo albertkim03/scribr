@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Trash2, ThumbsUp, Minus, ThumbsDown } from 'lucide-react'
+import { Plus, X, ThumbsUp, Minus, ThumbsDown } from 'lucide-react'
 import AddEventModal from './AddEventModal'
+import ConfirmModal from './ConfirmModal'
 import type { Event, Subject, Sentiment } from '@/types'
 
 interface Props {
@@ -64,17 +65,23 @@ export default function TrelloEventBoard({ events, subjects, studentId, studentN
 
   const [modalState, setModalState] = useState<ModalState | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
   const subjectColorMap: Record<string, typeof SUBJECT_PALETTE[0]> = {}
   subjects.forEach((s, i) => { subjectColorMap[s.id] = SUBJECT_PALETTE[i % SUBJECT_PALETTE.length] })
 
-  async function handleDelete(e: React.MouseEvent, eventId: string) {
+  function handleDelete(e: React.MouseEvent, eventId: string) {
     e.stopPropagation()
-    if (!confirm('Delete this event?')) return
-    setDeletingId(eventId)
-    await supabase.from('events').delete().eq('id', eventId)
-    setDeletingId(null)
-    router.refresh()
+    setConfirmModal({
+      message: 'Delete this event? This cannot be undone.',
+      onConfirm: async () => {
+        setConfirmModal(null)
+        setDeletingId(eventId)
+        await supabase.from('events').delete().eq('id', eventId)
+        setDeletingId(null)
+        router.refresh()
+      },
+    })
   }
 
   return (
@@ -128,10 +135,10 @@ export default function TrelloEventBoard({ events, subjects, studentId, studentN
                         <button
                           onClick={e => handleDelete(e, event.id)}
                           disabled={deletingId === event.id}
-                          className="p-1 text-[#6B778C] hover:text-red-600 hover:bg-red-50 rounded transition-colors btn-press-subtle opacity-0 group-hover:opacity-100 disabled:opacity-40"
+                          className="p-1.5 text-[#6B778C] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors btn-press-subtle opacity-0 group-hover:opacity-100 disabled:opacity-40"
                           title="Delete"
                         >
-                          <Trash2 size={11} />
+                          <X size={13} />
                         </button>
                       </div>
                     </div>
@@ -160,6 +167,13 @@ export default function TrelloEventBoard({ events, subjects, studentId, studentN
           existingEvent={modalState.existingEvent}
           defaultSentiment={modalState.defaultSentiment}
           onClose={() => setModalState(null)}
+        />
+      )}
+      {confirmModal && (
+        <ConfirmModal
+          message={confirmModal.message}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
         />
       )}
     </>

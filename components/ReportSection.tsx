@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Sparkles, Loader2 } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import ReportEditor from './ReportEditor'
 import GenerateReportModal from './GenerateReportModal'
 import RegenerateModal from './RegenerateModal'
@@ -27,20 +27,23 @@ interface Props {
 function TypewriterDisplay({ text, onDone }: { text: string; onDone: (text: string) => void }) {
   const [displayed, setDisplayed] = useState('')
 
+  // Strip any residual HTML tags (safety net — API should return plain text)
+  const plainText = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+
   useEffect(() => {
     let pos = 0
     const BATCH = 28
     const INTERVAL = 22
     const id = setInterval(() => {
-      pos = Math.min(pos + BATCH, text.length)
-      setDisplayed(text.slice(0, pos))
-      if (pos >= text.length) {
+      pos = Math.min(pos + BATCH, plainText.length)
+      setDisplayed(plainText.slice(0, pos))
+      if (pos >= plainText.length) {
         clearInterval(id)
         setTimeout(() => onDone(text), 500)
       }
     }, INTERVAL)
     return () => clearInterval(id)
-  }, [text]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [plainText]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="bg-white rounded-xl border-2 border-[#0052CC] shadow-sm overflow-hidden">
@@ -56,9 +59,40 @@ function TypewriterDisplay({ text, onDone }: { text: string; onDone: (text: stri
         </div>
         <span className="text-xs font-bold text-[#0052CC] tracking-wide">AI is writing…</span>
       </div>
-      <div className="px-6 py-5 min-h-[200px] font-[Georgia,serif] text-[#172B4D] leading-[1.8] whitespace-pre-wrap text-[0.95rem]">
+      <div className="px-6 py-5 min-h-[200px] text-[#172B4D] leading-[1.45] whitespace-pre-wrap text-[0.875rem]">
         {displayed}
         <span className="typewriter-cursor" />
+      </div>
+    </div>
+  )
+}
+
+// ── Generating state ──────────────────────────────────────────
+function GeneratingState() {
+  return (
+    <div className="bg-white rounded-xl border-2 border-purple-200 shadow-sm overflow-hidden">
+      <div className="bg-gradient-to-br from-violet-50 via-blue-50 to-cyan-50 px-6 py-10 flex flex-col items-center text-center">
+        <div className="relative mb-5">
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-violet-100 to-cyan-100 flex items-center justify-center">
+            <Sparkles size={22} className="text-violet-500" />
+          </div>
+          {/* <Loader2
+            size={52}
+            className="animate-spin text-[#0052CC]/30 absolute inset-[-3px]"
+            strokeWidth={1.5}
+          /> */}
+        </div>
+        <p className="text-base font-black text-[#172B4D] mb-1">Generating report…</p>
+        <p className="text-sm text-[#42526E]">Watch a TikTok while this generates</p>
+        <div className="flex gap-1.5 mt-4">
+          {[0, 200, 400].map(delay => (
+            <span
+              key={delay}
+              className="w-1.5 h-1.5 rounded-full bg-[#0052CC]/40"
+              style={{ animation: `blink 1.2s ease-in-out ${delay}ms infinite` }}
+            />
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -77,14 +111,14 @@ export default function ReportSection({
   )
   const [error, setError] = useState('')
 
-  async function handleGenerate(selectedEventIds: string[]) {
+  async function handleGenerate(selectedEventIds: string[], wordCount: number) {
     setPhase({ type: 'generating' })
     setError('')
     try {
       const res = await fetch('/api/reports/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, selectedEventIds }),
+        body: JSON.stringify({ studentId, selectedEventIds, wordCount }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -95,7 +129,7 @@ export default function ReportSection({
     }
   }
 
-  async function handleRegenerate(focusInstruction: string) {
+  async function handleRegenerate(focusInstruction: string, selectedEventIds: string[], wordCount: number) {
     const previousReport = phase.type === 'confirm-regenerate' ? phase.report : null
     setPhase({ type: 'generating' })
     setError('')
@@ -103,7 +137,7 @@ export default function ReportSection({
       const res = await fetch('/api/reports/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, previousContent: previousReport?.content, focusInstruction }),
+        body: JSON.stringify({ studentId, selectedEventIds, previousContent: previousReport?.content, focusInstruction, wordCount }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -186,13 +220,7 @@ export default function ReportSection({
   }
 
   if (phase.type === 'generating') {
-    return (
-      <div className="bg-white rounded-xl border border-[#DFE1E6] shadow-sm p-12 flex flex-col items-center text-center">
-        <Loader2 size={32} className="animate-spin text-[#0052CC] mb-4" />
-        <p className="text-lg font-bold text-[#172B4D]">Generating report…</p>
-        <p className="text-sm text-[#42526E] mt-1">This usually takes 10–20 seconds.</p>
-      </div>
-    )
+    return <GeneratingState />
   }
 
   if (phase.type === 'animating') {
@@ -208,7 +236,6 @@ export default function ReportSection({
   return (
     <>
       <ReportEditor
-        studentId={studentId}
         studentName={studentName}
         initialContent={currentReport.content}
         reportId={currentReport.id}
@@ -216,6 +243,8 @@ export default function ReportSection({
       />
       {phase.type === 'confirm-regenerate' && (
         <RegenerateModal
+          events={events}
+          subjects={subjects}
           onRegenerate={handleRegenerate}
           onClose={() => setPhase({ type: 'editing', report: phase.report })}
         />

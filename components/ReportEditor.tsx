@@ -11,7 +11,6 @@ import { createClient } from '@/lib/supabase/client'
 import { Clipboard, Printer, Loader2, Check, X as XIcon, Sparkles } from 'lucide-react'
 
 interface Props {
-  studentId: string
   studentName: string
   initialContent: string
   reportId: string
@@ -67,7 +66,6 @@ const RefactorFlashExtension = Extension.create({
 })
 
 export default function ReportEditor({
-  studentId,
   initialContent,
   reportId,
   onRequestRegenerate,
@@ -95,7 +93,53 @@ export default function ReportEditor({
   }
 
   const editorContainerRef = useRef<HTMLDivElement>(null)
+  const bubbleMenuRef = useRef<HTMLDivElement>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function closeCustomInput() {
+    setShowCustomInput(false)
+    setCustomInstruction('')
+    savedSelectionRef.current = null
+    savedRectRef.current = null
+    setBubbleMenuRect(null)
+  }
+
+  // Close custom input on window blur or tab hide (prevents stuck state on alt-tab)
+  useEffect(() => {
+    function handleHide() {
+      if (showCustomInputRef.current) {
+        setShowCustomInput(false)
+        setCustomInstruction('')
+        savedSelectionRef.current = null
+        savedRectRef.current = null
+        setBubbleMenuRect(null)
+      }
+    }
+    window.addEventListener('blur', handleHide)
+    document.addEventListener('visibilitychange', handleHide)
+    return () => {
+      window.removeEventListener('blur', handleHide)
+      document.removeEventListener('visibilitychange', handleHide)
+    }
+  }, [])
+
+  // Close bubble menu when clicking outside it
+  useEffect(() => {
+    function handleMouseDown(e: MouseEvent) {
+      if (!bubbleMenuRef.current) return
+      if (!bubbleMenuRef.current.contains(e.target as Node)) {
+        if (showCustomInputRef.current) {
+          setShowCustomInput(false)
+          setCustomInstruction('')
+          savedSelectionRef.current = null
+          savedRectRef.current = null
+          setBubbleMenuRect(null)
+        }
+      }
+    }
+    document.addEventListener('mousedown', handleMouseDown)
+    return () => document.removeEventListener('mousedown', handleMouseDown)
+  }, [])
 
   useEffect(() => {
     function handleSelectionChange() {
@@ -136,7 +180,8 @@ export default function ReportEditor({
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      StarterKit,
+      // Disable code/codeBlock — they capture ⌥⌘C / ⌥⌘E on Mac which is disruptive in a prose editor
+      StarterKit.configure({ code: false, codeBlock: false }),
       Placeholder.configure({
         placeholder: 'Start typing your report here, or use the Regenerate button above…',
       }),
@@ -163,7 +208,7 @@ export default function ReportEditor({
       const res = await fetch('/api/reports/refactor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ selectedText: sel.selectedText, instruction }),
+        body: JSON.stringify({ selectedText: sel.selectedText, instruction, fullContent: editor.getText() }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -309,82 +354,92 @@ export default function ReportEditor({
       {/* Floating AI bubble menu */}
       {(menuRect || showCustomInput) && !pendingRefactor && (
         <div
+          ref={bubbleMenuRef}
           className="fixed z-50 no-print"
           style={{
-            top: (menuRect?.top ?? 0) + window.scrollY,
+            top: menuRect?.top ?? 0,
             left: (menuRect?.left ?? 0) + (menuRect?.width ?? 0) / 2,
-            transform: 'translateX(-50%) translateY(calc(-100% - 8px))',
+            transform: 'translateX(-50%) translateY(calc(-100% - 14px))',
           }}
         >
-          {showCustomInput ? (
-            /* Custom instruction input */
-            <div className="flex items-center gap-1.5 bg-[#172B4D] rounded-lg p-2 shadow-2xl" style={{ minWidth: '260px' }}>
-              <input
-                autoFocus
-                value={customInstruction}
-                onChange={e => setCustomInstruction(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && customInstruction.trim()) handleCustomRefactor()
-                  if (e.key === 'Escape') { setShowCustomInput(false); setCustomInstruction('') }
-                }}
-                placeholder="Your instruction…"
-                className="flex-1 px-2.5 py-1.5 text-xs bg-white/10 text-white placeholder-white/40 rounded border border-white/20 focus:outline-none focus:border-white/60 min-w-0"
-              />
-              <button
-                onMouseDown={e => e.preventDefault()}
-                onClick={handleCustomRefactor}
-                disabled={!customInstruction.trim()}
-                className="shrink-0 px-2.5 py-1.5 text-xs text-white bg-white/20 rounded-md hover:bg-white/30 font-bold disabled:opacity-40 transition-colors whitespace-nowrap"
-              >
-                Apply
-              </button>
-              <button
-                onMouseDown={e => e.preventDefault()}
-                onClick={() => { setShowCustomInput(false); setCustomInstruction('') }}
-                className="shrink-0 p-1 text-white/60 hover:text-white rounded transition-colors"
-              >
-                <XIcon size={12} />
-              </button>
-            </div>
-          ) : (
-            /* Regular refactor options */
-            <div className="flex items-center gap-0.5 bg-[#172B4D] rounded-lg p-1 shadow-2xl flex-wrap max-w-lg">
+          <div className="bg-white border border-[#DFE1E6] rounded-xl shadow-lg overflow-hidden" style={{ minWidth: '220px' }}>
+            {/* Preset option buttons — always visible */}
+            <div className="p-1.5 flex flex-wrap gap-1">
               {REFACTOR_OPTIONS.map(opt => (
                 <button
                   key={opt.label}
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => handleRefactor(opt.instruction, opt.label)}
                   disabled={!!refactoringLabel}
-                  className="px-2.5 py-1 text-xs text-white rounded-md hover:bg-white/15 disabled:opacity-50 transition-colors whitespace-nowrap font-medium"
+                  className="px-2.5 py-1.5 text-xs text-[#172B4D] rounded-lg border border-[#DFE1E6] hover:bg-[#F4F5F7] hover:border-[#0052CC]/40 disabled:opacity-50 transition-colors whitespace-nowrap font-medium"
                 >
                   {refactoringLabel === opt.label ? (
                     <span className="flex items-center gap-1">
-                      <Loader2 size={10} className="animate-spin" />
+                      <Loader2 size={10} className="animate-spin text-[#0052CC]" />
                       {opt.label}
                     </span>
                   ) : opt.label}
                 </button>
               ))}
-              {/* Divider + Custom option */}
-              <span className="w-px h-4 bg-white/20 mx-0.5 self-center" />
-              <button
-                onMouseDown={e => e.preventDefault()}
-                onClick={() => {
-                  if (!editor) return
-                  const { from, to } = editor.state.selection
-                  const selectedText = editor.state.doc.textBetween(from, to, ' ')
-                  if (!selectedText.trim()) return
-                  savedSelectionRef.current = { from, to, selectedText }
-                  if (bubbleMenuRect) savedRectRef.current = bubbleMenuRect
-                  setShowCustomInput(true)
-                }}
-                disabled={!!refactoringLabel}
-                className="px-2.5 py-1 text-xs text-white/70 rounded-md hover:bg-white/15 hover:text-white disabled:opacity-50 transition-colors whitespace-nowrap font-medium italic"
-              >
-                Custom…
-              </button>
             </div>
-          )}
+
+            {/* Custom row — toggles between a trigger button and an inline input */}
+            <div className="border-t border-[#DFE1E6] p-1.5">
+              {showCustomInput ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    autoFocus
+                    value={customInstruction}
+                    onChange={e => setCustomInstruction(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && customInstruction.trim()) handleCustomRefactor()
+                      if (e.key === 'Escape') closeCustomInput()
+                    }}
+                    placeholder="Your instruction…"
+                    className="flex-1 min-w-0 px-2.5 py-1.5 text-xs border border-[#DFE1E6] rounded-lg text-[#172B4D] placeholder-[#6B778C] focus:outline-none focus:ring-2 focus:ring-[#0052CC] focus:border-transparent"
+                  />
+                  <button
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={handleCustomRefactor}
+                    disabled={!customInstruction.trim()}
+                    title="Send"
+                    className="shrink-0 flex items-center justify-center gap-1 px-2 py-1.5 text-xs bg-white border border-purple-200 rounded-lg font-bold hover:border-purple-400 disabled:opacity-40 transition-colors btn-press"
+                  >
+                    <Sparkles size={10} className="text-violet-500" />
+                    <span className="bg-gradient-to-r from-violet-500 via-blue-500 to-cyan-500 bg-clip-text text-transparent">
+                      Send
+                    </span>
+                  </button>
+                  <button
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={closeCustomInput}
+                    title="Cancel"
+                    className="shrink-0 p-1.5 text-[#6B778C] hover:text-[#172B4D] hover:bg-[#F4F5F7] rounded-lg transition-colors"
+                  >
+                    <XIcon size={13} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => {
+                    if (!editor) return
+                    const { from, to } = editor.state.selection
+                    const selectedText = editor.state.doc.textBetween(from, to, ' ')
+                    if (!selectedText.trim()) return
+                    savedSelectionRef.current = { from, to, selectedText }
+                    if (bubbleMenuRect) savedRectRef.current = bubbleMenuRect
+                    setShowCustomInput(true)
+                  }}
+                  disabled={!!refactoringLabel}
+                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-dashed border-[#DFE1E6] hover:border-purple-300 hover:bg-violet-50 disabled:opacity-50 transition-colors font-medium text-[#6B778C] hover:text-violet-600"
+                >
+                  <Sparkles size={10} className="text-violet-400" />
+                  Custom instruction…
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
