@@ -1,26 +1,112 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #F4F5F7;
+  --foreground: #172B4D;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, [role="button"] {
+  cursor: pointer;
+}
+
+/* ── Button press effects ────────────────────────────────── */
+.btn-press {
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+.btn-press:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 82, 204, 0.25);
+}
+.btn-press:active {
+  transform: translateY(0) scale(0.96);
+  box-shadow: 0 1px 4px rgba(0, 82, 204, 0.15);
+}
+
+.btn-press-subtle {
+  transition: transform 80ms ease, box-shadow 80ms ease, background-color 120ms ease;
+}
+.btn-press-subtle:active {
+  transform: scale(0.95);
+}
+
+/* ── TipTap editor ───────────────────────────────────────── */
+.tiptap-editor .ProseMirror {
+  outline: none;
+  min-height: 400px;
+  padding: 1.5rem;
+  line-height: 1.45;
+  font-size: 0.875rem;
+  cursor: text;
+}
+
+.tiptap-editor .ProseMirror p {
+  margin-bottom: 1em;
+}
+
+.tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
+  color: #94a3b8;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Focused editor gets a more obvious ring */
+.tiptap-editor:focus-within {
+  box-shadow: 0 0 0 2px #0052CC;
+}
+
+/* ── Typewriter cursor ───────────────────────────────────── */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.typewriter-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  background: #0052CC;
+  vertical-align: text-bottom;
+  margin-left: 1px;
+  animation: blink 0.75s step-start infinite;
+}
+
+/* ── Refactor diff highlight ─────────────────────────────── */
+@keyframes flash-green {
+  0% { background: #e3fcef; }
+  100% { background: transparent; }
+}
+.refactor-accepted {
+  animation: flash-green 1.2s ease forwards;
+}
+
+/* Blue underline flash on accepted refactor text */
+@keyframes refactor-flash-fade {
+  0%, 60% { text-decoration-color: #0052CC; opacity: 1; }
+  100% { text-decoration-color: transparent; opacity: 1; }
+}
+.refactor-flash {
+  text-decoration: underline;
+  text-decoration-color: #0052CC;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  animation: refactor-flash-fade 5s ease-out forwards;
+}
+
+/* ── Print ───────────────────────────────────────────────── */
+@media print {
+  .no-print { display: none !important; }
+  .print-content {
+    font-size: 12pt;
+    line-height: 1.6;
+    color: #000;
+  }
+  body { background: white; }
 }
