@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronDown, GraduationCap, Calendar, FileText, Search, AlertTriangle, Sparkles, Loader2 } from 'lucide-react'
+import { ChevronDown, GraduationCap, Calendar, FileText, Search, AlertTriangle, Sparkles, Loader2, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { markDirty } from '@/lib/route-cache'
 import ReportSection from './ReportSection'
@@ -13,6 +13,7 @@ interface StudentInfo {
   first_name: string
   last_name: string
   gender: string
+  profile_notes?: string | null
   class_id: string | null
   classes: { name: string } | null
   events: Event[]
@@ -66,27 +67,44 @@ function hashColor(name: string) {
 function ReportCard({
   report,
   subjects,
+  isExpanded,
+  onToggle,
 }: {
   report: ReportWithStudent
   subjects: Subject[]
+  isExpanded: boolean
+  onToggle: () => void
 }) {
-  const [expanded, setExpanded] = useState(false)
+  const supabase = createClient()
+  // Fetch fresh report data every time the card is opened to avoid stale content after regeneration
+  const [liveReport, setLiveReport] = useState<Report | null>(null)
+
+  useEffect(() => {
+    if (!isExpanded) return
+    supabase
+      .from('reports')
+      .select('*')
+      .eq('id', report.id)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setLiveReport(data) })
+  }, [isExpanded]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const student = report.students
   if (!student) return null
 
   const fullName = `${student.first_name} ${student.last_name}`
   const avatarColor = hashColor(fullName)
+  const displayReport = liveReport ?? report
   // Preview: strip HTML and trim to 160 chars
   const plainPreview = report.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
   const preview = plainPreview.slice(0, 160) + (plainPreview.length > 160 ? '…' : '')
 
   return (
     <div className="bg-white rounded-xl border border-[#DFE1E6] shadow-sm overflow-hidden">
-      {/* ── Card header (always visible) ────────────────── */}
+      {/* ── Card header (always visible) ── */}
       <div
         className="flex items-center gap-3 px-4 py-3.5 cursor-pointer hover:bg-[#F8FAFF] transition-colors select-none"
-        onClick={() => setExpanded(v => !v)}
+        onClick={onToggle}
       >
         {/* Avatar */}
         <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${avatarColor}`}>
@@ -106,7 +124,7 @@ function ReportCard({
           </div>
           <div className="flex items-center gap-1 mt-0.5 text-xs text-[#6B778C]">
             <Calendar size={10} />
-            <span>{formatDate(report.last_edited_at)}</span>
+            <span>{formatDate(displayReport.last_edited_at)}</span>
             <span className="ml-2 text-[#6B778C]/60">·</span>
             <span className="ml-1 truncate max-w-[300px] text-[#6B778C]/80">{preview}</span>
           </div>
@@ -114,22 +132,23 @@ function ReportCard({
 
         {/* Expand toggle */}
         <button
-          onClick={e => { e.stopPropagation(); setExpanded(v => !v) }}
+          onClick={e => { e.stopPropagation(); onToggle() }}
           className="shrink-0 p-1.5 text-[#6B778C] hover:text-[#172B4D] hover:bg-[#F4F5F7] rounded-lg transition-all"
         >
-          <ChevronDown size={18} className={`transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
+          <ChevronDown size={18} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
         </button>
       </div>
 
       {/* ── Full ReportSection (editor, copy, print, regenerate) ── */}
-      {expanded && (
+      {isExpanded && (
         <div className="border-t border-[#DFE1E6] px-5 py-5 bg-[#F8FAFF]">
           <ReportSection
             studentId={report.student_id}
             studentName={fullName}
-            report={report}
+            report={displayReport}
             events={student.events ?? []}
             subjects={subjects}
+            profileNotes={student.profile_notes ?? ''}
           />
         </div>
       )}
@@ -194,9 +213,37 @@ export default function AllReportsView({ reports, subjects, studentsWithoutRepor
   const router = useRouter()
   const supabase = createClient()
   const [search, setSearch] = useState('')
+  const [activeClassId, setActiveClassId] = useState<string | null>(null)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [loadingEventsFor, setLoadingEventsFor] = useState<string | null>(null)
   const [pendingGenerate, setPendingGenerate] = useState<{ student: StudentNoReport; events: Event[] } | null>(null)
   const [generatingForId, setGeneratingForId] = useState<string | null>(null)
+
+  // Derive unique classes from the embedded student data
+  const uniqueClasses = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const r of reports) {
+      if (r.students?.class_id && r.students.classes) {
+        seen.set(r.students.class_id, r.students.classes.name)
+      }
+    }
+    for (const s of studentsWithoutReport) {
+      if (s.class_id && s.classes) {
+        const name = Array.isArray(s.classes) ? s.classes[0]?.name : s.classes.name
+        if (name) seen.set(s.class_id, name)
+      }
+    }
+    return [...seen.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
+  }, [reports, studentsWithoutReport])
+
+  function toggleExpand(id: string) {
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   async function handleGenerateClick(student: StudentNoReport) {
     setLoadingEventsFor(student.id)
@@ -230,13 +277,74 @@ export default function AllReportsView({ reports, subjects, studentsWithoutRepor
   const filtered = reports.filter(r => {
     if (!r.students) return false
     const name = `${r.students.first_name} ${r.students.last_name}`.toLowerCase()
-    return name.includes(search.toLowerCase())
+    const nameMatch = name.includes(search.toLowerCase())
+    const classMatch = !activeClassId ? true
+      : activeClassId === '__none__' ? !r.students.class_id
+      : r.students.class_id === activeClassId
+    return nameMatch && classMatch
   })
 
   const filteredNoReport = studentsWithoutReport.filter(s => {
     const name = `${s.first_name} ${s.last_name}`.toLowerCase()
-    return name.includes(search.toLowerCase())
+    const nameMatch = name.includes(search.toLowerCase())
+    const classMatch = !activeClassId ? true
+      : activeClassId === '__none__' ? !s.class_id
+      : s.class_id === activeClassId
+    return nameMatch && classMatch
   })
+
+  const allExpanded = filtered.length > 0 && filtered.every(r => expandedIds.has(r.id))
+  const hasFilter = !!search || activeClassId !== null
+
+  function toggleAllExpanded() {
+    if (allExpanded) {
+      setExpandedIds(new Set())
+    } else {
+      setExpandedIds(prev => new Set([...prev, ...filtered.map(r => r.id)]))
+    }
+  }
+
+  // When viewing "All" with classes, build class groups combining reports + pending
+  const showGrouped = activeClassId === null && uniqueClasses.length > 0
+  interface ReportGroup {
+    classId: string | null
+    className: string | null
+    reports: ReportWithStudent[]
+    pending: StudentNoReport[]
+  }
+  const reportGroups: ReportGroup[] = (() => {
+    if (!showGrouped) return []
+    const sortedReports = [...filtered].sort((a, b) => {
+      const nameA = `${a.students?.last_name ?? ''} ${a.students?.first_name ?? ''}`.toLowerCase()
+      const nameB = `${b.students?.last_name ?? ''} ${b.students?.first_name ?? ''}`.toLowerCase()
+      return nameA.localeCompare(nameB)
+    })
+    const sortedPending = [...filteredNoReport].sort((a, b) =>
+      a.last_name.localeCompare(b.last_name) || a.first_name.localeCompare(b.first_name)
+    )
+    const map = new Map<string | null, ReportGroup>()
+    for (const r of sortedReports) {
+      const key = r.students?.class_id ?? null
+      if (!map.has(key)) map.set(key, { classId: key, className: key ? (r.students?.classes?.name ?? null) : null, reports: [], pending: [] })
+      map.get(key)!.reports.push(r)
+    }
+    for (const s of sortedPending) {
+      const key = s.class_id
+      if (!map.has(key)) {
+        const cls = s.classes
+        const name = key ? (Array.isArray(cls) ? cls[0]?.name ?? null : cls?.name ?? null) : null
+        map.set(key, { classId: key, className: name, reports: [], pending: [] })
+      }
+      map.get(key)!.pending.push(s)
+    }
+    const assigned = [...map.entries()]
+      .filter(([k]) => k !== null)
+      .sort(([, a], [, b]) => (a.className ?? '').localeCompare(b.className ?? ''))
+      .map(([, g]) => g)
+    const unassigned = map.get(null)
+    if (unassigned) assigned.push(unassigned)
+    return assigned
+  })()
 
   // Truly empty — no reports and no students at all
   if (reports.length === 0 && studentsWithoutReport.length === 0) {
@@ -271,7 +379,9 @@ export default function AllReportsView({ reports, subjects, studentsWithoutRepor
             </span>
           )}
         </div>
-        <div className="relative w-48">
+
+        {/* Search */}
+        <div className="relative shrink-0 w-48">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#6B778C]" />
           <input
             type="text"
@@ -281,16 +391,126 @@ export default function AllReportsView({ reports, subjects, studentsWithoutRepor
             className="w-full pl-7 pr-2.5 py-1.5 border border-[#DFE1E6] rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#0052CC] focus:border-transparent bg-white"
           />
         </div>
+
+        {/* Class filter pills */}
+        {uniqueClasses.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-1 overflow-x-auto min-w-0">
+            <div className="w-px h-4 bg-[#DFE1E6] shrink-0" />
+            <button
+              onClick={() => setActiveClassId(null)}
+              className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-bold transition-colors whitespace-nowrap ${
+                activeClassId === null
+                  ? 'bg-[#0052CC] text-white'
+                  : 'bg-white border border-[#DFE1E6] text-[#42526E] hover:border-[#0052CC] hover:text-[#0052CC]'
+              }`}
+            >
+              All
+            </button>
+            {uniqueClasses.map(cls => (
+              <button
+                key={cls.id}
+                onClick={() => setActiveClassId(cls.id)}
+                className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold transition-colors whitespace-nowrap ${
+                  activeClassId === cls.id
+                    ? 'bg-[#0052CC] text-white'
+                    : 'bg-white border border-[#DFE1E6] text-[#42526E] hover:border-[#0052CC] hover:text-[#0052CC]'
+                }`}
+              >
+                <GraduationCap size={9} />
+                {cls.name}
+              </button>
+            ))}
+            <button
+              onClick={() => setActiveClassId('__none__')}
+              className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-bold transition-colors whitespace-nowrap ${
+                activeClassId === '__none__'
+                  ? 'bg-slate-700 text-white'
+                  : 'bg-white border border-dashed border-[#DFE1E6] text-[#6B778C] hover:border-slate-400 hover:text-slate-700'
+              }`}
+            >
+              Unassigned
+            </button>
+          </div>
+        )}
+
+        {uniqueClasses.length === 0 && <div className="flex-1" />}
+
+        {/* Open all / Close all */}
+        {filtered.length > 0 && (
+          <button
+            onClick={toggleAllExpanded}
+            className="shrink-0 text-xs font-bold text-[#0052CC] hover:underline"
+          >
+            {allExpanded ? 'Close all' : 'Open all'}
+          </button>
+        )}
       </div>
+
+      {/* Filter feedback */}
+      {hasFilter && (
+        <div className="flex items-center gap-2 bg-[#DEEBFF] border border-blue-200 rounded-lg px-3 py-2 mb-3">
+          <span className="text-xs text-[#172B4D]">
+            Showing <strong>{filtered.length + filteredNoReport.length}</strong> of <strong>{reports.length + studentsWithoutReport.length}</strong> students
+          </span>
+          <button
+            onClick={() => { setSearch(''); setActiveClassId(null) }}
+            className="ml-auto flex items-center gap-1 text-xs font-bold text-[#0052CC] hover:underline btn-press-subtle"
+          >
+            <X size={11} /> Clear
+          </button>
+        </div>
+      )}
 
       {!hasFilteredResults ? (
         <div className="bg-white rounded-xl border border-[#DFE1E6] p-10 text-center shadow-sm">
           <p className="text-[#6B778C] text-sm">No results match your search.</p>
         </div>
+      ) : showGrouped ? (
+        /* ── Grouped by class ── */
+        <div className="space-y-2">
+          {reportGroups.map((group, gi) => (
+            <div key={group.classId ?? '__none__'}>
+              {/* Class header */}
+              <div className={`flex items-center gap-2 pb-1.5 ${gi > 0 ? 'pt-3' : ''}`}>
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-[#42526E] uppercase tracking-wide shrink-0">
+                  <GraduationCap size={10} />
+                  {group.className ?? 'Unassigned'}
+                </span>
+                <div className="flex-1 h-px bg-[#DFE1E6]" />
+              </div>
+              <div className="space-y-2">
+                {group.reports.map(report => (
+                  <ReportCard
+                    key={report.id}
+                    report={report}
+                    subjects={subjects}
+                    isExpanded={expandedIds.has(report.id)}
+                    onToggle={() => toggleExpand(report.id)}
+                  />
+                ))}
+                {group.pending.map(student => (
+                  <NoReportRow
+                    key={student.id}
+                    student={student}
+                    onGenerateClick={() => handleGenerateClick(student)}
+                    isLoading={loadingEventsFor === student.id || generatingForId === student.id}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
+        /* ── Flat list (specific class filter or no classes) ── */
         <div className="space-y-2">
           {filtered.map(report => (
-            <ReportCard key={report.id} report={report} subjects={subjects} />
+            <ReportCard
+              key={report.id}
+              report={report}
+              subjects={subjects}
+              isExpanded={expandedIds.has(report.id)}
+              onToggle={() => toggleExpand(report.id)}
+            />
           ))}
 
           {filteredNoReport.length > 0 && (

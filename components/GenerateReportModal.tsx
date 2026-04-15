@@ -246,12 +246,17 @@ export default function GenerateReportModal({ studentName, events, subjects, pro
             </button>
             <button
               onClick={handleGenerate}
-              disabled={noneSelected}
+              disabled={noneSelected && !(includeProfileNotes && hasNotes)}
               className="flex-1 flex items-center justify-center gap-2 bg-white border border-purple-200 px-6 py-2 rounded-lg text-sm font-bold hover:border-purple-400 hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition-all btn-press"
             >
               <Sparkles size={14} className="text-violet-500" />
               <span className="bg-gradient-to-r from-violet-500 via-blue-500 to-cyan-500 bg-clip-text text-transparent">
-                Generate with {selectedIds.size} event{selectedIds.size !== 1 ? 's' : ''}
+                {selectedIds.size > 0
+                  ? `Generate with ${selectedIds.size} event${selectedIds.size !== 1 ? 's' : ''}`
+                  : includeProfileNotes && hasNotes
+                    ? 'Generate from general comments'
+                    : 'Select events to generate'
+                }
               </span>
             </button>
           </div>

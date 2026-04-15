@@ -187,13 +187,13 @@ export default function ReportSection({
             </p>
           )}
           <button
-            onClick={() => events.length > 0 ? setPhase({ type: 'confirm-generate' }) : undefined}
-            disabled={events.length === 0}
+            onClick={() => (events.length > 0 || profileNotes.trim()) ? setPhase({ type: 'confirm-generate' }) : undefined}
+            disabled={events.length === 0 && !profileNotes.trim()}
             className="flex items-center gap-2 bg-white border border-purple-200 px-6 py-2.5 rounded-lg font-semibold hover:border-purple-400 hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition-all btn-press text-sm"
           >
             <Sparkles size={15} className="text-violet-500" />
             <span className="bg-gradient-to-r from-violet-500 via-blue-500 to-cyan-500 bg-clip-text text-transparent">
-              {events.length === 0 ? 'Log events first' : 'Generate report'}
+              {events.length === 0 && !profileNotes.trim() ? 'Log events first' : 'Generate report'}
             </span>
           </button>
         </div>

@@ -28,18 +28,20 @@ export async function POST(request: Request) {
     .eq('user_id', user.id)
     .order('created_at', { ascending: true })
 
-  if (!allEvents || allEvents.length === 0) {
-    return NextResponse.json({ error: 'No events logged for this student.' }, { status: 400 })
+  const canUseNotes = includeProfileNotes && student.profile_notes?.trim()
+
+  if ((!allEvents || allEvents.length === 0) && !canUseNotes) {
+    return NextResponse.json({ error: 'No events logged and no general comments for this student.' }, { status: 400 })
   }
 
   // Filter to selected events (if provided), otherwise use all
   const events =
     selectedEventIds && selectedEventIds.length > 0
-      ? allEvents.filter(e => selectedEventIds.includes(e.id))
-      : allEvents
+      ? (allEvents ?? []).filter(e => selectedEventIds.includes(e.id))
+      : (allEvents ?? [])
 
-  if (events.length === 0) {
-    return NextResponse.json({ error: 'No events selected for the report.' }, { status: 400 })
+  if (events.length === 0 && !canUseNotes) {
+    return NextResponse.json({ error: 'No events selected and no general comments to use.' }, { status: 400 })
   }
 
   // Group events by subject
@@ -84,6 +86,8 @@ export async function POST(request: Request) {
 
   const sharedRules = `Output ONLY the report text. Do not start with "Here is..." or any introductory phrase. Begin directly with the student's first name. ${lengthRule} Do not use em dashes (—) — use commas or restructure sentences instead. Use plain text paragraphs separated by blank lines. Do not use HTML tags, markdown, bullet points, or headings.`
 
+  const eventsBlock = sections.length > 0 ? `\n\n${sections.join('\n\n')}` : ''
+
   const prompt = isRevision
     ? `You are revising an existing student report for a teacher.
 
@@ -92,22 +96,25 @@ ${cleanPreviousContent}
 
 [TEACHER INSTRUCTION]: ${focusInstruction || 'Improve and refine this report.'}
 
-Using the observations below (${events.length} events), rewrite the report according to the teacher's instruction. Keep it professional, in third person using the student's first name. Make meaningful changes — do not simply repeat the previous version.
+${events.length > 0 ? `Using the observations below (${events.length} events), rewrite` : 'Rewrite'} the report according to the teacher's instruction. Keep it professional, in third person using the student's first name. Make meaningful changes — do not simply repeat the previous version.
 ${sharedRules}
 ${profileContext}
 [STUDENT NAME]: ${student.first_name} ${student.last_name}
-[GENDER]: ${student.gender}
-
-${sections.join('\n\n')}`
-    : `You are assisting a teacher in writing an end-of-year student report.
+[GENDER]: ${student.gender}${eventsBlock}`
+    : events.length === 0
+      ? `You are assisting a teacher in writing an end-of-year student report based on their general notes.
+Write a professional, balanced, and encouraging report in prose. Write in third person using the student's first name.
+${sharedRules}
+${profileContext}
+[STUDENT NAME]: ${student.first_name} ${student.last_name}
+[GENDER]: ${student.gender}`
+      : `You are assisting a teacher in writing an end-of-year student report.
 Below are observations logged throughout the year, grouped by subject.
 Write a professional, balanced, and encouraging report in prose. Write in third person using the student's first name. Each subject should have its own paragraph.
 ${sharedRules}
 ${profileContext}
 [STUDENT NAME]: ${student.first_name} ${student.last_name}
-[GENDER]: ${student.gender}
-
-${sections.join('\n\n')}`
+[GENDER]: ${student.gender}${eventsBlock}`
 
   try {
     const message = await anthropic.messages.create({

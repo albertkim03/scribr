@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -61,7 +61,7 @@ interface Props {
 }
 
 // ── Inline report panel (lazy-fetches report on mount) ──────────
-function InlineReportPanel({ student, subjects }: { student: StudentWithStats; subjects: Subject[] }) {
+function InlineReportPanel({ student, subjects, profileNotes }: { student: StudentWithStats; subjects: Subject[]; profileNotes: string }) {
   const supabase = createClient()
   const [report, setReport] = useState<Report | null | undefined>(undefined)
 
@@ -89,7 +89,7 @@ function InlineReportPanel({ student, subjects }: { student: StudentWithStats; s
       report={report}
       events={student.events}
       subjects={subjects}
-      profileNotes={student.profile_notes ?? ''}
+      profileNotes={profileNotes}
     />
   )
 }
@@ -111,7 +111,11 @@ function AddEventGhostCell({ onClick, compact = false }: { onClick: () => void; 
 }
 
 // ── General comments (profile_notes) inline editor ─────────────
-function ProfileNotesEditor({ studentId, initialNotes }: { studentId: string; initialNotes: string }) {
+function ProfileNotesEditor({ studentId, initialNotes, onSave }: {
+  studentId: string
+  initialNotes: string
+  onSave?: (notes: string) => void
+}) {
   const supabase = createClient()
   const [notes, setNotes] = useState(initialNotes)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
@@ -126,6 +130,7 @@ function ProfileNotesEditor({ studentId, initialNotes }: { studentId: string; in
       setSaveStatus('saving')
       await supabase.from('students').update({ profile_notes: val }).eq('id', studentId)
       setSaveStatus('saved')
+      onSave?.(val)
       setTimeout(() => setSaveStatus('idle'), 2000)
     }, 800)
   }
@@ -161,6 +166,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
   const [search, setSearch] = useState('')
   const [activeClassId, setActiveClassId] = useState<string | null>(null)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const [savedNotes, setSavedNotes] = useState<Record<string, string>>({})
   const [eventSortMap, setEventSortMap] = useState<Record<string, EventSortKey>>({})
   const [reportPanelId, setReportPanelId] = useState<string | null>(null)
   const [showAddStudent, setShowAddStudent] = useState(false)
@@ -256,6 +262,32 @@ export default function StudentTable({ students, subjects, classes }: Props) {
   })
 
   const hasFilter = !!search || activeClassId !== null
+
+  // When viewing "All" with classes, group students by class (alphabetical within each group)
+  interface StudentGroup { classId: string | null; className: string | null; students: StudentWithStats[] }
+  const sortAlpha = (arr: StudentWithStats[]) =>
+    [...arr].sort((a, b) => a.last_name.localeCompare(b.last_name) || a.first_name.localeCompare(b.first_name))
+
+  const studentGroups: StudentGroup[] = (() => {
+    const sorted = sortAlpha(filtered)
+    if (activeClassId !== null || classes.length === 0) {
+      return [{ classId: null, className: null, students: sorted }]
+    }
+    const map = new Map<string | null, StudentWithStats[]>()
+    for (const s of sorted) {
+      const key = s.class_id
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(s)
+    }
+    const result: StudentGroup[] = classes
+      .filter(c => map.has(c.id))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(c => ({ classId: c.id, className: c.name, students: map.get(c.id)! }))
+    const unassigned = map.get(null) ?? []
+    if (unassigned.length > 0) result.push({ classId: null, className: null, students: unassigned })
+    return result
+  })()
+  const showGroupHeaders = activeClassId === null && classes.length > 0 && studentGroups.length > 1
 
   return (
     <>
@@ -369,7 +401,18 @@ export default function StudentTable({ students, subjects, classes }: Props) {
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map(student => {
+          {studentGroups.map(group => (
+            <Fragment key={group.classId ?? '__none__'}>
+              {showGroupHeaders && (
+                <div className="flex items-center gap-2 pt-1 first:pt-0">
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-[#42526E] uppercase tracking-wide shrink-0">
+                    <GraduationCap size={10} />
+                    {group.className ?? 'Unassigned'}
+                  </span>
+                  <div className="flex-1 h-px bg-[#DFE1E6]" />
+                </div>
+              )}
+              {group.students.map(student => {
             const isExpanded = expandedIds.has(student.id)
             const isPanelOpen = reportPanelId === student.id
             const sortKey = getEventSort(student.id)
@@ -456,7 +499,8 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                     {/* General comments — always visible when expanded */}
                     <ProfileNotesEditor
                       studentId={student.id}
-                      initialNotes={student.profile_notes ?? ''}
+                      initialNotes={savedNotes[student.id] ?? student.profile_notes ?? ''}
+                      onSave={n => setSavedNotes(prev => ({ ...prev, [student.id]: n }))}
                     />
 
                     {student.events.length > 1 && (
@@ -538,7 +582,8 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                         {/* General comments */}
                         <ProfileNotesEditor
                           studentId={student.id}
-                          initialNotes={student.profile_notes ?? ''}
+                          initialNotes={savedNotes[student.id] ?? student.profile_notes ?? ''}
+                          onSave={n => setSavedNotes(prev => ({ ...prev, [student.id]: n }))}
                         />
                         {/* Ghost cell at top */}
                         <AddEventGhostCell onClick={() => setAddEventStudent(student)} compact />
@@ -574,13 +619,14 @@ export default function StudentTable({ students, subjects, classes }: Props) {
 
                     {/* Right: report editor */}
                     <div className="flex-1 overflow-y-auto p-5" style={{ maxHeight: '520px' }}>
-                      <InlineReportPanel student={student} subjects={subjects} />
+                      <InlineReportPanel student={student} subjects={subjects} profileNotes={savedNotes[student.id] ?? student.profile_notes} />
                     </div>
                   </div>
                 )}
               </div>
-            )
-          })}
+            )})}
+            </Fragment>
+          ))}
         </div>
       )}
 
