@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -13,6 +13,7 @@ import AddEventModal from './AddEventModal'
 import ReportSection from './ReportSection'
 import Select from './Select'
 import ConfirmModal from './ConfirmModal'
+import { markDirty } from '@/lib/route-cache'
 import type { StudentWithStats, Subject, Class, Event, Sentiment, Report } from '@/types'
 
 function formatDate(d: string) {
@@ -88,6 +89,7 @@ function InlineReportPanel({ student, subjects }: { student: StudentWithStats; s
       report={report}
       events={student.events}
       subjects={subjects}
+      profileNotes={student.profile_notes ?? ''}
     />
   )
 }
@@ -105,6 +107,49 @@ function AddEventGhostCell({ onClick, compact = false }: { onClick: () => void; 
       <Plus size={compact ? 11 : 13} className="group-hover:scale-110 transition-transform" />
       {compact ? 'Add event' : 'Log new event'}
     </button>
+  )
+}
+
+// ── General comments (profile_notes) inline editor ─────────────
+function ProfileNotesEditor({ studentId, initialNotes }: { studentId: string; initialNotes: string }) {
+  const supabase = createClient()
+  const [notes, setNotes] = useState(initialNotes)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const val = e.target.value
+    setNotes(val)
+    setSaveStatus('idle')
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(async () => {
+      setSaveStatus('saving')
+      await supabase.from('students').update({ profile_notes: val }).eq('id', studentId)
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 2000)
+    }, 800)
+  }
+
+  return (
+    <div className="mb-3 bg-white rounded-lg border border-[#DFE1E6] px-3 pt-2.5 pb-2.5">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-bold text-[#42526E] uppercase tracking-wide">General Comments</span>
+        <span className={`text-xs font-medium transition-colors ${
+          saveStatus === 'saving' ? 'text-[#0052CC]'
+          : saveStatus === 'saved' ? 'text-emerald-600'
+          : 'text-transparent'
+        }`}>
+          {saveStatus === 'saving' ? 'Saving…' : 'Saved'}
+        </span>
+      </div>
+      <textarea
+        value={notes}
+        onChange={handleChange}
+        rows={2}
+        placeholder="Add general notes about this student…"
+        className="w-full text-xs text-[#172B4D] placeholder-[#6B778C] focus:outline-none resize-none bg-transparent leading-relaxed"
+      />
+    </div>
   )
 }
 
@@ -178,6 +223,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
         setDeletingEventId(eventId)
         await supabase.from('events').delete().eq('id', eventId)
         setDeletingEventId(null)
+        markDirty('dashboard')
         router.refresh()
       },
     })
@@ -193,6 +239,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
         setDeletingStudentId(studentId)
         await supabase.from('students').delete().eq('id', studentId)
         setDeletingStudentId(null)
+        markDirty('dashboard')
         router.refresh()
       },
     })
@@ -304,11 +351,21 @@ export default function StudentTable({ students, subjects, classes }: Props) {
       )}
 
       {/* ── Student list ─────────────────────────── */}
-      {filtered.length === 0 ? (
+      {students.length === 0 ? (
+        /* No students at all — big dotted clickable empty state */
+        <button
+          onClick={() => setShowAddStudent(true)}
+          className="w-full border-2 border-dashed border-[#DFE1E6] rounded-xl p-16 text-center hover:border-[#0052CC] hover:bg-[#F8FAFF] transition-all group"
+        >
+          <div className="w-14 h-14 bg-[#F4F5F7] rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-[#DEEBFF] transition-colors">
+            <Plus size={24} className="text-[#6B778C] group-hover:text-[#0052CC] transition-colors" />
+          </div>
+          <p className="text-base font-bold text-[#172B4D] mb-1">No students yet</p>
+          <p className="text-sm text-[#6B778C]">Click here to add your first student</p>
+        </button>
+      ) : filtered.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#DFE1E6] p-12 text-center shadow-sm">
-          <p className="text-[#6B778C] text-sm">
-            {search ? 'No students match your search.' : 'No students yet — add one to get started.'}
-          </p>
+          <p className="text-[#6B778C] text-sm">No students match your search.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -396,6 +453,12 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                 {/* ── Events accordion ───────────────────── */}
                 {isExpanded && !isPanelOpen && (
                   <div className="border-t border-[#DFE1E6] bg-[#F4F5F7]/60 px-4 py-3">
+                    {/* General comments — always visible when expanded */}
+                    <ProfileNotesEditor
+                      studentId={student.id}
+                      initialNotes={student.profile_notes ?? ''}
+                    />
+
                     {student.events.length > 1 && (
                       <div className="flex items-center gap-2 mb-3">
                         <span className="text-xs text-[#6B778C] font-medium">Sort:</span>
@@ -472,6 +535,11 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                         </span>
                       </div>
                       <div className="p-2 space-y-1.5 flex-1">
+                        {/* General comments */}
+                        <ProfileNotesEditor
+                          studentId={student.id}
+                          initialNotes={student.profile_notes ?? ''}
+                        />
                         {/* Ghost cell at top */}
                         <AddEventGhostCell onClick={() => setAddEventStudent(student)} compact />
 

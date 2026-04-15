@@ -7,7 +7,7 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { studentId, selectedEventIds, previousContent, focusInstruction, length = 'standard' } = await request.json()
+  const { studentId, selectedEventIds, previousContent, focusInstruction, length = 'standard', includeProfileNotes = true } = await request.json()
   if (!studentId) return NextResponse.json({ error: 'Missing studentId' }, { status: 400 })
 
   // Fetch student
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     return `--- ${subjectName.toUpperCase()} ---\n${lines.join('\n')}`
   })
 
-  const profileContext = student.profile_notes?.trim()
+  const profileContext = includeProfileNotes && student.profile_notes?.trim()
     ? `\n[TEACHER NOTES]: ${student.profile_notes.trim()}\n`
     : ''
 

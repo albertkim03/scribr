@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronDown, GraduationCap, Calendar, FileText, Search, AlertTriangle, Sparkles, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { markDirty } from '@/lib/route-cache'
 import ReportSection from './ReportSection'
 import GenerateReportModal from './GenerateReportModal'
 import type { Event, Report, Subject } from '@/types'
@@ -25,6 +26,7 @@ interface StudentNoReport {
   id: string
   first_name: string
   last_name: string
+  profile_notes: string | null
   class_id: string | null
   // Supabase returns embedded belongs-to as array at type level; handle both at runtime
   classes: { name: string } | { name: string }[] | null
@@ -207,7 +209,7 @@ export default function AllReportsView({ reports, subjects, studentsWithoutRepor
     setPendingGenerate({ student, events: events ?? [] })
   }
 
-  async function handleGenerate(selectedEventIds: string[], length: string) {
+  async function handleGenerate(selectedEventIds: string[], length: string, includeProfileNotes: boolean) {
     if (!pendingGenerate) return
     const { student } = pendingGenerate
     setPendingGenerate(null)
@@ -216,10 +218,11 @@ export default function AllReportsView({ reports, subjects, studentsWithoutRepor
       await fetch('/api/reports/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: student.id, selectedEventIds, length }),
+        body: JSON.stringify({ studentId: student.id, selectedEventIds, length, includeProfileNotes }),
       })
     } finally {
       setGeneratingForId(null)
+      markDirty('reports')
       router.refresh()
     }
   }
@@ -320,6 +323,7 @@ export default function AllReportsView({ reports, subjects, studentsWithoutRepor
           studentName={`${pendingGenerate.student.first_name} ${pendingGenerate.student.last_name}`}
           events={pendingGenerate.events}
           subjects={subjects}
+          profileNotes={pendingGenerate.student.profile_notes ?? ''}
           onGenerate={handleGenerate}
           onClose={() => setPendingGenerate(null)}
         />

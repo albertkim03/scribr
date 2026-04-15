@@ -7,6 +7,7 @@ import { Plus, X, ThumbsUp, Minus, ThumbsDown } from 'lucide-react'
 import AddEventModal from './AddEventModal'
 import ConfirmModal from './ConfirmModal'
 import type { Event, Subject, Sentiment } from '@/types'
+import { markDirty } from '@/lib/route-cache'
 
 interface Props {
   events: Event[]
@@ -88,6 +89,7 @@ export default function TrelloEventBoard({ events, subjects, studentId, studentN
         setDeletingId(eventId)
         await supabase.from('events').delete().eq('id', eventId)
         setDeletingId(null)
+        markDirty('dashboard')
         router.refresh()
       },
     })

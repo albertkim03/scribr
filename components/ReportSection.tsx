@@ -21,6 +21,7 @@ interface Props {
   report: Report | null
   events: Event[]
   subjects: Subject[]
+  profileNotes?: string
 }
 
 // ── Typewriter display ─────────────────────────────────────────
@@ -105,20 +106,21 @@ export default function ReportSection({
   report: initialReport,
   events,
   subjects,
+  profileNotes = '',
 }: Props) {
   const [phase, setPhase] = useState<Phase>(
     initialReport ? { type: 'editing', report: initialReport } : { type: 'empty' }
   )
   const [error, setError] = useState('')
 
-  async function handleGenerate(selectedEventIds: string[], length: string) {
+  async function handleGenerate(selectedEventIds: string[], length: string, includeProfileNotes: boolean) {
     setPhase({ type: 'generating' })
     setError('')
     try {
       const res = await fetch('/api/reports/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, selectedEventIds, length }),
+        body: JSON.stringify({ studentId, selectedEventIds, length, includeProfileNotes }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -129,7 +131,7 @@ export default function ReportSection({
     }
   }
 
-  async function handleRegenerate(focusInstruction: string, selectedEventIds: string[], length: string) {
+  async function handleRegenerate(focusInstruction: string, selectedEventIds: string[], length: string, includeProfileNotes: boolean) {
     const previousReport = phase.type === 'confirm-regenerate' ? phase.report : null
     setPhase({ type: 'generating' })
     setError('')
@@ -137,7 +139,7 @@ export default function ReportSection({
       const res = await fetch('/api/reports/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, selectedEventIds, previousContent: previousReport?.content, focusInstruction, length }),
+        body: JSON.stringify({ studentId, selectedEventIds, previousContent: previousReport?.content, focusInstruction, length, includeProfileNotes }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -212,6 +214,7 @@ export default function ReportSection({
           studentName={studentName}
           events={events}
           subjects={subjects}
+          profileNotes={profileNotes}
           onGenerate={handleGenerate}
           onClose={() => setPhase({ type: 'empty' })}
         />
@@ -245,6 +248,7 @@ export default function ReportSection({
         <RegenerateModal
           events={events}
           subjects={subjects}
+          profileNotes={profileNotes}
           onRegenerate={handleRegenerate}
           onClose={() => setPhase({ type: 'editing', report: phase.report })}
         />

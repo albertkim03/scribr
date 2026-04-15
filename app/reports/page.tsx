@@ -22,7 +22,7 @@ export default async function ReportsPage() {
       .order('name'),
     supabase
       .from('students')
-      .select('id, first_name, last_name, class_id, classes(name)')
+      .select('id, first_name, last_name, profile_notes, class_id, classes(name)')
       .eq('user_id', user.id)
       .order('last_name'),
   ])

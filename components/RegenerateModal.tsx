@@ -1,13 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Sparkles, ThumbsUp, Minus, ThumbsDown, Check } from 'lucide-react'
+import { X, Sparkles, ThumbsUp, Minus, ThumbsDown, Check, FileText } from 'lucide-react'
 import type { Event, Subject, Sentiment } from '@/types'
 
 interface Props {
   events: Event[]
   subjects: Subject[]
-  onRegenerate: (instruction: string, selectedEventIds: string[], length: string) => void
+  profileNotes: string
+  onRegenerate: (instruction: string, selectedEventIds: string[], length: string, includeProfileNotes: boolean) => void
   onClose: () => void
 }
 
@@ -47,12 +48,14 @@ function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export default function RegenerateModal({ events, subjects, onRegenerate, onClose }: Props) {
+export default function RegenerateModal({ events, subjects, profileNotes, onRegenerate, onClose }: Props) {
   const [instruction, setInstruction] = useState('')
   const [activePreset, setActivePreset] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(events.map(e => e.id)))
   const [length, setLength] = useState('standard')
   const [showEvents, setShowEvents] = useState(false)
+  const hasNotes = profileNotes.trim() !== ''
+  const [includeProfileNotes, setIncludeProfileNotes] = useState(hasNotes)
 
   const subjectColorMap: Record<string, typeof SUBJECT_PALETTE[0]> = {}
   subjects.forEach((s, i) => { subjectColorMap[s.id] = SUBJECT_PALETTE[i % SUBJECT_PALETTE.length] })
@@ -76,7 +79,7 @@ export default function RegenerateModal({ events, subjects, onRegenerate, onClos
   function handleSubmit() {
     const trimmed = instruction.trim()
     if (!trimmed) return
-    onRegenerate(trimmed, [...selectedIds], length)
+    onRegenerate(trimmed, [...selectedIds], length, includeProfileNotes)
     // Do NOT call onClose() — parent's phase transition dismisses this modal
   }
 
@@ -148,6 +151,40 @@ export default function RegenerateModal({ events, subjects, onRegenerate, onClos
                 placeholder="e.g. Focus on improvement over the year and end on an encouraging note…"
                 className="w-full px-3 py-2.5 border border-[#DFE1E6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0052CC] focus:border-transparent resize-none text-[#172B4D] placeholder-[#6B778C]"
               />
+            </div>
+
+            {/* General Comments */}
+            <div>
+              <p className="text-xs font-bold text-[#42526E] uppercase tracking-wide mb-2">General Comments</p>
+              <button
+                type="button"
+                disabled={!hasNotes}
+                onClick={() => hasNotes && setIncludeProfileNotes(v => !v)}
+                className={`flex items-start gap-2.5 w-full text-left rounded-lg border px-3 py-2.5 transition-all ${
+                  !hasNotes
+                    ? 'bg-[#F4F5F7] border-[#DFE1E6] opacity-50 cursor-default'
+                    : includeProfileNotes
+                      ? 'bg-white border-[#0052CC] shadow-sm btn-press-subtle'
+                      : 'bg-[#F4F5F7] border-[#DFE1E6] opacity-60 btn-press-subtle'
+                }`}
+              >
+                <div className={`mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                  includeProfileNotes && hasNotes ? 'bg-[#0052CC] border-[#0052CC]' : 'bg-white border-[#DFE1E6]'
+                }`}>
+                  {includeProfileNotes && hasNotes && <Check size={9} className="text-white" strokeWidth={3} />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <FileText size={11} className="text-[#6B778C] shrink-0" />
+                    <span className="text-xs font-semibold text-[#42526E]">General Comments</span>
+                  </div>
+                  {hasNotes ? (
+                    <p className="text-xs text-[#172B4D] line-clamp-2 leading-relaxed">{profileNotes.trim()}</p>
+                  ) : (
+                    <p className="text-xs text-[#6B778C] italic">No general comments added yet</p>
+                  )}
+                </div>
+              </button>
             </div>
 
             {/* Events */}

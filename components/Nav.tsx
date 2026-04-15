@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Users, FileText, User } from 'lucide-react'
 import ScribrLogo from './ScribrLogo'
+import { isDirty, clearDirty } from '@/lib/route-cache'
 
 const NAV_TABS = [
   { href: '/dashboard', label: 'Students', Icon: Users },
@@ -23,6 +24,19 @@ export default function Nav() {
       if (user) setUserName(user.user_metadata?.full_name ?? user.email ?? null)
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // If the current route was marked dirty by a mutation, force a fresh fetch.
+  // This guarantees correctness even if router.refresh() in the mutation handler
+  // hadn't finished before the user navigated away.
+  useEffect(() => {
+    const routeKey = pathname === '/dashboard' ? 'dashboard'
+      : pathname === '/reports' ? 'reports'
+      : null
+    if (routeKey && isDirty(routeKey)) {
+      clearDirty(routeKey)
+      router.refresh()
+    }
+  }, [pathname]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleLogout() {
     await supabase.auth.signOut()

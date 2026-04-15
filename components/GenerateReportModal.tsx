@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Sparkles, ThumbsUp, Minus, ThumbsDown, Check } from 'lucide-react'
+import { X, Sparkles, ThumbsUp, Minus, ThumbsDown, Check, FileText } from 'lucide-react'
 import type { Event, Subject, Sentiment } from '@/types'
 
 const LENGTH_OPTIONS = [
@@ -14,7 +14,8 @@ interface Props {
   studentName: string
   events: Event[]
   subjects: Subject[]
-  onGenerate: (selectedEventIds: string[], length: string) => void
+  profileNotes: string
+  onGenerate: (selectedEventIds: string[], length: string, includeProfileNotes: boolean) => void
   onClose: () => void
 }
 
@@ -39,9 +40,11 @@ function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export default function GenerateReportModal({ studentName, events, subjects, onGenerate, onClose }: Props) {
+export default function GenerateReportModal({ studentName, events, subjects, profileNotes, onGenerate, onClose }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(events.map(e => e.id)))
   const [length, setLength] = useState('standard')
+  const hasNotes = profileNotes.trim() !== ''
+  const [includeProfileNotes, setIncludeProfileNotes] = useState(hasNotes)
 
   const subjectColorMap: Record<string, typeof SUBJECT_PALETTE[0]> = {}
   subjects.forEach((s, i) => { subjectColorMap[s.id] = SUBJECT_PALETTE[i % SUBJECT_PALETTE.length] })
@@ -65,7 +68,7 @@ export default function GenerateReportModal({ studentName, events, subjects, onG
 
   function handleGenerate() {
     if (selectedIds.size === 0) return
-    onGenerate([...selectedIds], length)
+    onGenerate([...selectedIds], length, includeProfileNotes)
     // Do NOT call onClose() — parent's phase transition dismisses this modal
   }
 
@@ -112,14 +115,58 @@ export default function GenerateReportModal({ studentName, events, subjects, onG
           </div>
         </div>
 
-        {/* Events list */}
-        {events.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center py-12">
-            <p className="text-[#6B778C] text-sm">No events logged yet for this student.</p>
+        {/* Scrollable body: General Comments + Events */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {/* General Comments card */}
+          <button
+            type="button"
+            disabled={!hasNotes}
+            onClick={() => hasNotes && setIncludeProfileNotes(v => !v)}
+            className={`w-full text-left rounded-xl border-2 p-3.5 transition-all ${
+              !hasNotes
+                ? 'bg-[#F4F5F7] border-transparent opacity-50 cursor-default'
+                : includeProfileNotes
+                  ? 'bg-white border-[#0052CC] shadow-sm btn-press-subtle'
+                  : 'bg-[#F4F5F7] border-transparent opacity-50 btn-press-subtle'
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <div className={`mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${
+                includeProfileNotes && hasNotes ? 'bg-[#0052CC] border-[#0052CC]' : 'bg-white border-[#DFE1E6]'
+              }`}>
+                {includeProfileNotes && hasNotes && <Check size={11} className="text-white" strokeWidth={3} />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-[#EAE6FF] text-[#403294] border border-[#C0B6F2]">
+                    <FileText size={10} />
+                    General Comments
+                  </span>
+                </div>
+                {hasNotes ? (
+                  <p className="text-sm text-[#172B4D] leading-relaxed line-clamp-2">
+                    {profileNotes.trim()}
+                  </p>
+                ) : (
+                  <p className="text-sm text-[#6B778C] italic">No general comments added yet</p>
+                )}
+              </div>
+            </div>
+          </button>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 pt-1 pb-0.5">
+            <div className="flex-1 h-px bg-[#DFE1E6]" />
+            <span className="text-xs font-bold text-[#6B778C] uppercase tracking-wide shrink-0">Events</span>
+            <div className="flex-1 h-px bg-[#DFE1E6]" />
           </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto p-4 space-y-2">
-            {events.map(event => {
+
+          {events.length === 0 ? (
+            <div className="flex items-center justify-center py-8">
+              <p className="text-[#6B778C] text-sm">No events logged yet for this student.</p>
+            </div>
+          ) : (
+            events.map(event => {
               const isSelected = selectedIds.has(event.id)
               const subColor = event.subject_id
                 ? (subjectColorMap[event.subject_id] ?? SUBJECT_PALETTE[7])
@@ -164,9 +211,9 @@ export default function GenerateReportModal({ studentName, events, subjects, onG
                   </div>
                 </button>
               )
-            })}
-          </div>
-        )}
+            })
+          )}
+        </div>
 
         {/* Footer */}
         <div className="shrink-0 px-4 py-4 border-t border-[#DFE1E6] bg-white rounded-b-2xl space-y-3">

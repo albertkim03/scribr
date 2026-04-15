@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { X, Check } from 'lucide-react'
 import Select from './Select'
 import type { Gender, Class } from '@/types'
+import { markDirty } from '@/lib/route-cache'
 
 interface Props {
   classes?: Class[]
@@ -85,6 +86,7 @@ export default function AddStudentModal({ classes: initialClasses = [], onClose 
       setError(error.message)
       setLoading(false)
     } else {
+      markDirty('dashboard')
       router.refresh()
       onClose()
     }

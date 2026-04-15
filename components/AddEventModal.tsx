@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { X, Plus } from 'lucide-react'
 import Select from './Select'
 import type { Subject, Sentiment, Event } from '@/types'
+import { markDirty } from '@/lib/route-cache'
 
 interface Props {
   studentId: string
@@ -116,6 +117,7 @@ export default function AddEventModal({
       setError(error.message)
       setLoading(false)
     } else {
+      markDirty('dashboard')
       router.refresh()
       onClose()
     }
