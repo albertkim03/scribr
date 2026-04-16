@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronDown, GraduationCap, Calendar, FileText, Search, AlertTriangle, Sparkles, Loader2, X } from 'lucide-react'
+import { ChevronDown, GraduationCap, Calendar, FileText, Search, AlertTriangle, Sparkles, Loader2, X, Circle, CheckCircle2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { markDirty } from '@/lib/route-cache'
 import ReportSection from './ReportSection'
 import GenerateReportModal from './GenerateReportModal'
-import type { Event, Report, Subject } from '@/types'
+import type { Event, Report, ReportStatus, Subject } from '@/types'
 
 interface StudentInfo {
   first_name: string
@@ -95,9 +95,17 @@ function ReportCard({
   const fullName = `${student.first_name} ${student.last_name}`
   const avatarColor = hashColor(fullName)
   const displayReport = liveReport ?? report
+  const status: ReportStatus = displayReport.status ?? 'draft'
   // Preview: strip HTML and trim to 160 chars
   const plainPreview = report.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
   const preview = plainPreview.slice(0, 160) + (plainPreview.length > 160 ? '…' : '')
+
+  function toggleStatus(e: React.MouseEvent) {
+    e.stopPropagation()
+    const newStatus: ReportStatus = status === 'draft' ? 'complete' : 'draft'
+    setLiveReport(prev => ({ ...(prev ?? report), status: newStatus }))
+    supabase.from('reports').update({ status: newStatus }).eq('id', report.id)
+  }
 
   return (
     <div className="bg-white rounded-xl border border-[#DFE1E6] shadow-sm overflow-hidden">
@@ -126,17 +134,33 @@ function ReportCard({
             <Calendar size={10} />
             <span>{formatDate(displayReport.last_edited_at)}</span>
             <span className="ml-2 text-[#6B778C]/60">·</span>
-            <span className="ml-1 truncate max-w-[300px] text-[#6B778C]/80">{preview}</span>
+            <span className="ml-1 truncate max-w-[220px] text-[#6B778C]/80">{preview}</span>
           </div>
         </div>
 
-        {/* Expand toggle */}
-        <button
-          onClick={e => { e.stopPropagation(); onToggle() }}
-          className="shrink-0 p-1.5 text-[#6B778C] hover:text-[#172B4D] hover:bg-[#F4F5F7] rounded-lg transition-all"
-        >
-          <ChevronDown size={18} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-        </button>
+        {/* Status toggle + expand */}
+        <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={toggleStatus}
+            title={status === 'complete' ? 'Mark as draft' : 'Mark as complete'}
+            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold border transition-colors ${
+              status === 'complete'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+            }`}
+          >
+            {status === 'complete'
+              ? <><CheckCircle2 size={11} /> Complete</>
+              : <><Circle size={11} /> Draft</>
+            }
+          </button>
+          <button
+            onClick={onToggle}
+            className="p-1.5 text-[#6B778C] hover:text-[#172B4D] hover:bg-[#F4F5F7] rounded-lg transition-all"
+          >
+            <ChevronDown size={18} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {/* ── Full ReportSection (editor, copy, print, regenerate) ── */}

@@ -190,8 +190,40 @@ export default function StudentTable({ students, subjects, classes }: Props) {
     if (activeClassId === classId) setActiveClassId(null)
   }
 
-  function handleStudentSaved(id: string, updates: { first_name: string; last_name: string; gender: Gender; class_id: string | null }) {
+  function handleStudentSaved(id: string, updates: { first_name: string; last_name: string; gender: Gender; class_id: string | null; avatar_url?: string | null }) {
     setLocalStudents(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s))
+  }
+
+  function handleStudentAdded(student: StudentWithStats) {
+    setLocalStudents(prev => [...prev, student])
+  }
+
+  function handleSubjectDeleted(subjectId: string) {
+    setLocalStudents(prev => prev.map(s => ({
+      ...s,
+      events: s.events.map(e =>
+        e.subject_id === subjectId ? { ...e, subject_id: null, subjects: null } : e
+      ),
+    })))
+  }
+
+  function handleEventAdded(studentId: string, event: Event) {
+    setLocalStudents(prev => prev.map(s => {
+      if (s.id !== studentId) return s
+      return {
+        ...s,
+        events: [event, ...s.events],
+        event_count: s.event_count + 1,
+        last_event_date: event.created_at,
+      }
+    }))
+  }
+
+  function handleEventUpdated(studentId: string, event: Event) {
+    setLocalStudents(prev => prev.map(s => {
+      if (s.id !== studentId) return s
+      return { ...s, events: s.events.map(e => e.id === event.id ? event : e) }
+    }))
   }
 
   // Subject color map
@@ -450,6 +482,18 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                       isExpanded || isPanelOpen ? 'rotate-90' : ''
                     }`}
                   />
+                  {/* Avatar */}
+                  {student.avatar_url ? (
+                    <img
+                      src={student.avatar_url}
+                      alt=""
+                      className="w-8 h-8 rounded-full object-cover shrink-0 border border-[#DFE1E6]"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-[#42526E] text-xs font-black shrink-0">
+                      {student.first_name[0]}{student.last_name[0]}
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-[#172B4D] text-sm">
@@ -659,6 +703,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
         <AddStudentModal
           classes={localClasses}
           onClassDeleted={handleClassDeleted}
+          onCreated={handleStudentAdded}
           onClose={() => setShowAddStudent(false)}
         />
       )}
@@ -676,6 +721,8 @@ export default function StudentTable({ students, subjects, classes }: Props) {
           studentId={addEventStudent.id}
           studentName={`${addEventStudent.first_name} ${addEventStudent.last_name}`}
           subjects={subjects}
+          onSubjectDeleted={handleSubjectDeleted}
+          onSaved={event => handleEventAdded(addEventStudent.id, event)}
           onClose={() => setAddEventStudent(null)}
         />
       )}
@@ -685,6 +732,8 @@ export default function StudentTable({ students, subjects, classes }: Props) {
           studentName={`${editingEvent.student.first_name} ${editingEvent.student.last_name}`}
           subjects={subjects}
           existingEvent={editingEvent.event}
+          onSubjectDeleted={handleSubjectDeleted}
+          onSaved={event => handleEventUpdated(editingEvent.student.id, event)}
           onClose={() => setEditingEvent(null)}
         />
       )}

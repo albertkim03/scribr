@@ -8,12 +8,14 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import { createClient } from '@/lib/supabase/client'
-import { Clipboard, Printer, Loader2, Check, X as XIcon, Sparkles } from 'lucide-react'
+import { Clipboard, Printer, Loader2, Check, X as XIcon, Sparkles, Circle, CheckCircle2 } from 'lucide-react'
+import type { ReportStatus } from '@/types'
 
 interface Props {
   studentName: string
   initialContent: string
   reportId: string
+  reportStatus?: ReportStatus
   onRequestRegenerate?: () => void
 }
 
@@ -68,11 +70,19 @@ const RefactorFlashExtension = Extension.create({
 export default function ReportEditor({
   initialContent,
   reportId,
+  reportStatus,
   onRequestRegenerate,
 }: Props) {
   const supabase = createClient()
 
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
+  const [status, setStatus] = useState<ReportStatus>(reportStatus ?? 'draft')
+
+  function toggleStatus() {
+    const newStatus: ReportStatus = status === 'draft' ? 'complete' : 'draft'
+    setStatus(newStatus)
+    supabase.from('reports').update({ status: newStatus }).eq('id', reportId)
+  }
   const [refactoringLabel, setRefactoringLabel] = useState<string | null>(null)
   const [refactorError, setRefactorError] = useState('')
   const [bubbleMenuRect, setBubbleMenuRect] = useState<DOMRect | null>(null)
@@ -269,16 +279,33 @@ export default function ReportEditor({
     <div>
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-4 mb-3 no-print flex-wrap">
-        <span className={`text-xs font-medium transition-colors ${
-          saveStatus === 'saving' ? 'text-[#0052CC]'
-          : saveStatus === 'unsaved' ? 'text-amber-600'
-          : 'text-[#6B778C]'
-        }`}>
-          {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Unsaved changes'}
-          <span className="text-[#6B778C] font-normal hidden sm:inline">
-            {' '}· Select any text to rewrite with AI
+        <div className="flex items-center gap-2">
+          {/* Status toggle */}
+          <button
+            onClick={toggleStatus}
+            title={status === 'complete' ? 'Mark as draft' : 'Mark as complete'}
+            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+              status === 'complete'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+            }`}
+          >
+            {status === 'complete'
+              ? <><CheckCircle2 size={11} /> Complete</>
+              : <><Circle size={11} /> Draft</>
+            }
+          </button>
+          <span className={`text-xs font-medium transition-colors ${
+            saveStatus === 'saving' ? 'text-[#0052CC]'
+            : saveStatus === 'unsaved' ? 'text-amber-600'
+            : 'text-[#6B778C]'
+          }`}>
+            {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Unsaved'}
+            <span className="text-[#6B778C] font-normal hidden sm:inline">
+              {' '}· Select any text to rewrite with AI
+            </span>
           </span>
-        </span>
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={handleCopy}

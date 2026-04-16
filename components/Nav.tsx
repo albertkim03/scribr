@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Users, FileText, User } from 'lucide-react'
+import { Users, FileText, User, Sparkles } from 'lucide-react'
 import ScribrLogo from './ScribrLogo'
 import { isDirty, clearDirty } from '@/lib/route-cache'
 
@@ -13,21 +13,32 @@ const NAV_TABS = [
   { href: '/reports',   label: 'Reports',  Icon: FileText },
 ]
 
+const DAILY_LIMIT = 200
+
 export default function Nav() {
   const router = useRouter()
   const pathname = usePathname()
   const supabase = createClient()
   const [userName, setUserName] = useState<string | null>(null)
+  const [aiUsage, setAiUsage] = useState<number | null>(null)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setUserName(user.user_metadata?.full_name ?? user.email ?? null)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return
+      setUserName(session.user.user_metadata?.full_name ?? session.user.email ?? null)
+
+      const today = new Date().toISOString().split('T')[0]
+      supabase
+        .from('ai_usage')
+        .select('count')
+        .eq('user_id', session.user.id)
+        .eq('date', today)
+        .maybeSingle()
+        .then(({ data }) => setAiUsage(data?.count ?? 0))
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // If the current route was marked dirty by a mutation, force a fresh fetch.
-  // This guarantees correctness even if router.refresh() in the mutation handler
-  // hadn't finished before the user navigated away.
   useEffect(() => {
     const routeKey = pathname === '/dashboard' ? 'dashboard'
       : pathname === '/reports' ? 'reports'
@@ -43,8 +54,14 @@ export default function Nav() {
     router.push('/login')
   }
 
+  const usagePct = aiUsage !== null ? Math.min(100, (aiUsage / DAILY_LIMIT) * 100) : 0
+  const barColor = aiUsage !== null
+    ? aiUsage >= DAILY_LIMIT * 0.9 ? '#EF4444'
+    : aiUsage >= DAILY_LIMIT * 0.7 ? '#F59E0B'
+    : '#3B82F6'
+    : '#3B82F6'
+
   return (
-    /* Solid deep navy + blue bottom border gives layered depth without a gradient sweep */
     <nav className="sticky top-0 z-40 bg-[#0A1628] border-b-2 border-[#0052CC] no-print">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="flex items-center h-14">
@@ -59,10 +76,8 @@ export default function Nav() {
               <span className="hidden sm:inline">Scribr</span>
             </Link>
 
-            {/* Vertical separator */}
             <div className="h-5 w-px bg-white/20 shrink-0" />
 
-            {/* Nav tabs */}
             <div className="flex items-center gap-1">
               {NAV_TABS.map(({ href, label, Icon }) => {
                 const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href + '/'))
@@ -84,8 +99,54 @@ export default function Nav() {
             </div>
           </div>
 
-          {/* ── Right: user + sign out ─────────────────────── */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* ── Right: AI usage bar + user + sign out ─────── */}
+          <div className="flex items-center gap-3 shrink-0">
+
+            {/* AI usage indicator */}
+            {aiUsage !== null && (
+              <div className="relative group hidden md:flex items-center gap-1.5">
+                <Sparkles size={11} className="text-white/30 shrink-0" />
+                <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden cursor-default">
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{ width: `${usagePct}%`, backgroundColor: barColor }}
+                  />
+                </div>
+
+                {/* Hover tooltip */}
+                <div className="absolute top-full right-0 mt-3 hidden group-hover:block pointer-events-none z-50">
+                  <div
+                    className="bg-white rounded-xl border border-[#DFE1E6] p-4 w-52 text-left"
+                    style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}
+                  >
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Sparkles size={12} className="text-violet-500" />
+                      <span className="text-xs font-black text-[#172B4D]">AI usage today</span>
+                    </div>
+                    <p className="text-2xl font-black text-[#0052CC] leading-none mb-0.5">
+                      {aiUsage}
+                      <span className="text-sm text-[#6B778C] font-semibold"> / {DAILY_LIMIT}</span>
+                    </p>
+                    <p className="text-xs text-[#6B778C] mb-2">requests used</p>
+                    <div className="h-2 bg-[#F4F5F7] rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${usagePct}%`, backgroundColor: barColor }}
+                      />
+                    </div>
+                    <p className="text-xs text-[#6B778C] mt-2">Resets at midnight UTC</p>
+                    {aiUsage >= DAILY_LIMIT * 0.9 && (
+                      <p className="text-xs font-semibold text-red-600 mt-1.5">
+                        {aiUsage >= DAILY_LIMIT ? 'Limit reached for today.' : 'Almost at daily limit.'}
+                      </p>
+                    )}
+                  </div>
+                  {/* Tooltip arrow */}
+                  <div className="absolute right-4 bottom-full w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-[#DFE1E6]" />
+                </div>
+              </div>
+            )}
+
             {userName && (
               <div className="hidden md:flex items-center gap-1.5 text-white/50 text-xs">
                 <User size={13} />

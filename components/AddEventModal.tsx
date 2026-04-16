@@ -14,6 +14,8 @@ interface Props {
   subjects: Subject[]
   existingEvent?: Event
   defaultSentiment?: Sentiment
+  onSubjectDeleted?: (subjectId: string) => void
+  onSaved?: (event: Event) => void
   onClose: () => void
 }
 
@@ -37,6 +39,8 @@ export default function AddEventModal({
   subjects: initialSubjects,
   existingEvent,
   defaultSentiment,
+  onSubjectDeleted,
+  onSaved,
   onClose,
 }: Props) {
   const router = useRouter()
@@ -74,20 +78,22 @@ export default function AddEventModal({
   }
 
   async function handleDeleteSubject(deletedId: string) {
-    await supabase.from('subjects').delete().eq('id', deletedId)
+    // Async DB delete — fire and forget for snappy UI
+    supabase.from('subjects').delete().eq('id', deletedId).then(() => {})
     setSubjects(prev => prev.filter(s => s.id !== deletedId))
     if (subjectId === deletedId) setSubjectId('')
+    onSubjectDeleted?.(deletedId)
   }
 
   async function handleAddSubject() {
     if (!newSubjectName.trim()) return
     setAddingSubject(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setAddingSubject(false); return }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { setAddingSubject(false); return }
 
     const { data, error } = await supabase
       .from('subjects')
-      .insert({ user_id: user.id, name: newSubjectName.trim() })
+      .insert({ user_id: session.user.id, name: newSubjectName.trim() })
       .select()
       .single()
 
@@ -106,28 +112,52 @@ export default function AddEventModal({
     setError('')
     setLoading(true)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
 
     const payload = {
       student_id: studentId,
-      user_id: user.id,
+      user_id: session.user.id,
       subject_id: subjectId || null,
       sentiment,
       description: description.trim(),
     }
 
-    const { error } = existingEvent
-      ? await supabase.from('events').update(payload).eq('id', existingEvent.id)
-      : await supabase.from('events').insert(payload)
-
-    if (error) {
-      setError(error.message)
-      setLoading(false)
+    if (existingEvent) {
+      const { error } = await supabase.from('events').update(payload).eq('id', existingEvent.id)
+      if (error) {
+        setError(error.message)
+        setLoading(false)
+      } else {
+        const updatedEvent: Event = {
+          ...existingEvent,
+          ...payload,
+          subjects: subjects.find(s => s.id === subjectId) ?? null,
+        }
+        onSaved?.(updatedEvent)
+        markDirty('dashboard')
+        router.refresh()
+        onClose()
+      }
     } else {
-      markDirty('dashboard')
-      router.refresh()
-      onClose()
+      const { data: newEvent, error } = await supabase
+        .from('events')
+        .insert(payload)
+        .select()
+        .single()
+      if (error) {
+        setError(error.message)
+        setLoading(false)
+      } else {
+        const eventWithSubject: Event = {
+          ...newEvent,
+          subjects: subjects.find(s => s.id === subjectId) ?? null,
+        }
+        onSaved?.(eventWithSubject)
+        markDirty('dashboard')
+        router.refresh()
+        onClose()
+      }
     }
   }
 

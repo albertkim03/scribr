@@ -163,6 +163,7 @@ export default function ReportSection({
         student_id: studentId,
         user_id: '',
         content: text,
+        status: 'draft',
         generated_at: new Date().toISOString(),
         last_edited_at: new Date().toISOString(),
       },
@@ -242,6 +243,7 @@ export default function ReportSection({
         studentName={studentName}
         initialContent={currentReport.content}
         reportId={currentReport.id}
+        reportStatus={currentReport.status}
         onRequestRegenerate={() => setPhase({ type: 'confirm-regenerate', report: currentReport })}
       />
       {phase.type === 'confirm-regenerate' && (

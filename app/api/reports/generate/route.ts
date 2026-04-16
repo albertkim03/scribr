@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { anthropic } from '@/lib/anthropic'
 
+const DAILY_LIMIT = 200
+
 export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -9,6 +11,23 @@ export async function POST(request: Request) {
 
   const { studentId, selectedEventIds, previousContent, focusInstruction, length = 'standard', includeProfileNotes = true } = await request.json()
   if (!studentId) return NextResponse.json({ error: 'Missing studentId' }, { status: 400 })
+
+  // ── Rate limit check ────────────────────────────────────────
+  const today = new Date().toISOString().split('T')[0]
+  const { data: usageRow } = await supabase
+    .from('ai_usage')
+    .select('count')
+    .eq('user_id', user.id)
+    .eq('date', today)
+    .maybeSingle()
+
+  const currentCount = usageRow?.count ?? 0
+  if (currentCount >= DAILY_LIMIT) {
+    return NextResponse.json({
+      error: `You've reached today's limit of ${DAILY_LIMIT} AI requests. Usage resets at midnight UTC.`,
+      rateLimited: true,
+    }, { status: 429 })
+  }
 
   // Fetch student
   const { data: student } = await supabase
@@ -137,6 +156,7 @@ ${profileContext}
           student_id: studentId,
           user_id: user.id,
           content: reportText,
+          status: 'draft', // AI-generated reports always start as draft
           generated_at: new Date().toISOString(),
           last_edited_at: new Date().toISOString(),
         },
@@ -147,7 +167,13 @@ ${profileContext}
 
     if (error) throw error
 
-    return NextResponse.json({ report })
+    // Increment usage counter (fire and forget — don't block the response)
+    supabase.from('ai_usage').upsert(
+      { user_id: user.id, date: today, count: currentCount + 1 },
+      { onConflict: 'user_id,date' }
+    ).then(() => {})
+
+    return NextResponse.json({ report, usageCount: currentCount + 1, dailyLimit: DAILY_LIMIT })
   } catch (err) {
     console.error('Report generation error:', err)
     return NextResponse.json({ error: 'Failed to generate report. Please try again.' }, { status: 500 })

@@ -1,5 +1,6 @@
 export type Gender = 'Male' | 'Female' | 'Other' | 'Prefer not to say'
 export type Sentiment = 'positive' | 'neutral' | 'negative'
+export type ReportStatus = 'draft' | 'complete'
 
 export interface Class {
   id: string
@@ -16,6 +17,7 @@ export interface Student {
   gender: Gender
   profile_notes: string
   class_id: string | null
+  avatar_url?: string | null
   created_at: string
 }
 
@@ -42,6 +44,7 @@ export interface Report {
   student_id: string
   user_id: string
   content: string
+  status: ReportStatus
   generated_at: string
   last_edited_at: string
 }
