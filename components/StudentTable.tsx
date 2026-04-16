@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   ChevronRight, Plus, Search,
   ThumbsUp, Minus, ThumbsDown,
-  GraduationCap, X, Loader2, Sparkles,
+  GraduationCap, X, Loader2, Sparkles, Pencil,
 } from 'lucide-react'
 import AddStudentModal from './AddStudentModal'
 import AddEventModal from './AddEventModal'
@@ -14,7 +14,7 @@ import ReportSection from './ReportSection'
 import Select from './Select'
 import ConfirmModal from './ConfirmModal'
 import { markDirty } from '@/lib/route-cache'
-import type { StudentWithStats, Subject, Class, Event, Sentiment, Report } from '@/types'
+import type { StudentWithStats, Subject, Class, Event, Sentiment, Report, Gender } from '@/types'
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -176,6 +176,24 @@ export default function StudentTable({ students, subjects, classes }: Props) {
   const [deletingStudentId, setDeletingStudentId] = useState<string | null>(null)
   const [confirmModal, setConfirmModal] = useState<{ message: string; confirmLabel?: string; onConfirm: () => void } | null>(null)
 
+  // Local mutable copies — updated optimistically so class deletions/edits reflect immediately without a full refresh
+  const [localClasses, setLocalClasses] = useState<Class[]>(classes)
+  const [localStudents, setLocalStudents] = useState<StudentWithStats[]>(students)
+  useEffect(() => { setLocalClasses(classes) }, [classes])    // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setLocalStudents(students) }, [students]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [editingStudent, setEditingStudent] = useState<StudentWithStats | null>(null)
+
+  function handleClassDeleted(classId: string) {
+    setLocalClasses(prev => prev.filter(c => c.id !== classId))
+    setLocalStudents(prev => prev.map(s => s.class_id === classId ? { ...s, class_id: null } : s))
+    if (activeClassId === classId) setActiveClassId(null)
+  }
+
+  function handleStudentSaved(id: string, updates: { first_name: string; last_name: string; gender: Gender; class_id: string | null }) {
+    setLocalStudents(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s))
+  }
+
   // Subject color map
   const subjectColorMap: Record<string, typeof SUBJECT_PALETTE[0]> = {}
   subjects.forEach((s, i) => { subjectColorMap[s.id] = SUBJECT_PALETTE[i % SUBJECT_PALETTE.length] })
@@ -251,7 +269,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
     })
   }
 
-  const filtered = students.filter(s => {
+  const filtered = localStudents.filter(s => {
     const nameMatch = `${s.first_name} ${s.last_name}`.toLowerCase().includes(search.toLowerCase())
     const classMatch = activeClassId === null
       ? true
@@ -270,7 +288,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
 
   const studentGroups: StudentGroup[] = (() => {
     const sorted = sortAlpha(filtered)
-    if (activeClassId !== null || classes.length === 0) {
+    if (activeClassId !== null || localClasses.length === 0) {
       return [{ classId: null, className: null, students: sorted }]
     }
     const map = new Map<string | null, StudentWithStats[]>()
@@ -279,7 +297,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(s)
     }
-    const result: StudentGroup[] = classes
+    const result: StudentGroup[] = localClasses
       .filter(c => map.has(c.id))
       .sort((a, b) => a.name.localeCompare(b.name))
       .map(c => ({ classId: c.id, className: c.name, students: map.get(c.id)! }))
@@ -287,7 +305,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
     if (unassigned.length > 0) result.push({ classId: null, className: null, students: unassigned })
     return result
   })()
-  const showGroupHeaders = activeClassId === null && classes.length > 0 && studentGroups.length > 1
+  const showGroupHeaders = activeClassId === null && localClasses.length > 0 && studentGroups.length > 1
 
   return (
     <>
@@ -297,7 +315,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
         <div className="flex items-center gap-2 mr-1 shrink-0">
           <span className="text-sm font-bold text-[#172B4D]">Students</span>
           <span className="px-1.5 py-0.5 bg-[#DFE1E6] text-[#42526E] rounded-full text-xs font-semibold">
-            {students.length}
+            {localStudents.length}
           </span>
         </div>
 
@@ -314,7 +332,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
         </div>
 
         {/* Class filter pills */}
-        {classes.length > 0 && (
+        {localClasses.length > 0 && (
           <div className="flex items-center gap-1.5 flex-1 overflow-x-auto min-w-0">
             <div className="w-px h-4 bg-[#DFE1E6] shrink-0" />
             <button
@@ -327,7 +345,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
             >
               All
             </button>
-            {classes.map(cls => (
+            {localClasses.map(cls => (
               <button
                 key={cls.id}
                 onClick={() => setActiveClassId(cls.id)}
@@ -355,7 +373,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
         )}
 
         {/* Spacer when no class tabs */}
-        {classes.length === 0 && <div className="flex-1" />}
+        {localClasses.length === 0 && <div className="flex-1" />}
 
         {/* Add student */}
         <button
@@ -371,7 +389,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
       {hasFilter && (
         <div className="flex items-center gap-2 bg-[#DEEBFF] border border-blue-200 rounded-lg px-3 py-2 mb-3">
           <span className="text-xs text-[#172B4D]">
-            Showing <strong>{filtered.length}</strong> of <strong>{students.length}</strong> students
+            Showing <strong>{filtered.length}</strong> of <strong>{localStudents.length}</strong> students
           </span>
           <button
             onClick={() => { setSearch(''); setActiveClassId(null) }}
@@ -383,7 +401,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
       )}
 
       {/* ── Student list ─────────────────────────── */}
-      {students.length === 0 ? (
+      {localStudents.length === 0 ? (
         /* No students at all — big dotted clickable empty state */
         <button
           onClick={() => setShowAddStudent(true)}
@@ -417,13 +435,13 @@ export default function StudentTable({ students, subjects, classes }: Props) {
             const isPanelOpen = reportPanelId === student.id
             const sortKey = getEventSort(student.id)
             const sortedEvents = sortEvents(student.events, sortKey)
-            const studentClass = student.classes as { name: string } | null | undefined
+            const effectiveClass = student.class_id ? localClasses.find(c => c.id === student.class_id) ?? null : null
 
             return (
               <div key={student.id} className="bg-white rounded-xl border border-[#DFE1E6] shadow-sm overflow-hidden">
                 {/* ── Header ─────────────────────────────── */}
                 <div
-                  className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-[#F4F5F7] transition-colors select-none"
+                  className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-[#F4F5F7] transition-colors select-none group"
                   onClick={() => isPanelOpen ? setReportPanelId(null) : toggleExpand(student.id)}
                 >
                   <ChevronRight
@@ -437,10 +455,10 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                       <span className="font-bold text-[#172B4D] text-sm">
                         {student.first_name} {student.last_name}
                       </span>
-                      {studentClass && (
+                      {effectiveClass && (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#DEEBFF] text-[#0052CC] rounded-full text-xs font-bold">
                           <GraduationCap size={9} />
-                          {studentClass.name}
+                          {effectiveClass.name}
                         </span>
                       )}
                       <span className="px-1.5 py-0.5 bg-slate-100 text-[#42526E] rounded-full text-xs font-medium">
@@ -478,6 +496,13 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                           </span>
                         </>
                       )}
+                    </button>
+                    <button
+                      onClick={() => setEditingStudent(student)}
+                      className="p-2 text-[#6B778C] hover:text-[#0052CC] hover:bg-blue-50 rounded-lg transition-colors btn-press-subtle"
+                      title="Edit student"
+                    >
+                      <Pencil size={14} />
                     </button>
                     <button
                       onClick={e => handleDeleteStudent(e, student.id, `${student.first_name} ${student.last_name}`)}
@@ -631,7 +656,20 @@ export default function StudentTable({ students, subjects, classes }: Props) {
       )}
 
       {showAddStudent && (
-        <AddStudentModal classes={classes} onClose={() => setShowAddStudent(false)} />
+        <AddStudentModal
+          classes={localClasses}
+          onClassDeleted={handleClassDeleted}
+          onClose={() => setShowAddStudent(false)}
+        />
+      )}
+      {editingStudent && (
+        <AddStudentModal
+          classes={localClasses}
+          existingStudent={editingStudent}
+          onClassDeleted={handleClassDeleted}
+          onSaved={handleStudentSaved}
+          onClose={() => setEditingStudent(null)}
+        />
       )}
       {addEventStudent && (
         <AddEventModal

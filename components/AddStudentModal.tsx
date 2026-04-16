@@ -8,8 +8,19 @@ import Select from './Select'
 import type { Gender, Class } from '@/types'
 import { markDirty } from '@/lib/route-cache'
 
+interface ExistingStudent {
+  id: string
+  first_name: string
+  last_name: string
+  gender: Gender
+  class_id: string | null
+}
+
 interface Props {
   classes?: Class[]
+  existingStudent?: ExistingStudent
+  onClassDeleted?: (classId: string) => void
+  onSaved?: (id: string, updates: { first_name: string; last_name: string; gender: Gender; class_id: string | null }) => void
   onClose: () => void
 }
 
@@ -17,14 +28,14 @@ const GENDERS: Gender[] = ['Male', 'Female', 'Other', 'Prefer not to say']
 const GENDER_OPTIONS = GENDERS.map(g => ({ value: g, label: g }))
 const CREATE_CLASS_VALUE = '__create_class__'
 
-export default function AddStudentModal({ classes: initialClasses = [], onClose }: Props) {
+export default function AddStudentModal({ classes: initialClasses = [], existingStudent, onClassDeleted, onSaved, onClose }: Props) {
   const router = useRouter()
   const supabase = createClient()
 
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
-  const [gender, setGender] = useState<Gender>('Male')
-  const [classId, setClassId] = useState<string>('')
+  const [firstName, setFirstName] = useState(existingStudent?.first_name ?? '')
+  const [lastName, setLastName] = useState(existingStudent?.last_name ?? '')
+  const [gender, setGender] = useState<Gender>(existingStudent?.gender ?? 'Male')
+  const [classId, setClassId] = useState<string>(existingStudent?.class_id ?? '')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -44,6 +55,8 @@ export default function AddStudentModal({ classes: initialClasses = [], onClose 
       setCreatingClass(true)
     } else {
       setClassId(v)
+      setCreatingClass(false)
+      setNewClassName('')
     }
   }
 
@@ -66,6 +79,13 @@ export default function AddStudentModal({ classes: initialClasses = [], onClose 
     setCreatingClass(false)
   }
 
+  async function handleDeleteClass(deletedId: string) {
+    await supabase.from('classes').delete().eq('id', deletedId)
+    setLocalClasses(prev => prev.filter(c => c.id !== deletedId))
+    if (classId === deletedId) setClassId('')
+    onClassDeleted?.(deletedId)
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
@@ -74,21 +94,46 @@ export default function AddStudentModal({ classes: initialClasses = [], onClose 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const { error } = await supabase.from('students').insert({
-      user_id: user.id,
+    // If the teacher was typing a new class name and didn't explicitly save it,
+    // auto-create it now so the student gets assigned correctly.
+    let effectiveClassId = classId
+    if (creatingClass && newClassName.trim()) {
+      const { data: newClass } = await supabase
+        .from('classes')
+        .insert({ user_id: user.id, name: newClassName.trim() })
+        .select()
+        .single()
+      if (newClass) effectiveClassId = newClass.id
+    }
+
+    const payload = {
       first_name: firstName.trim(),
       last_name: lastName.trim(),
       gender,
-      class_id: classId || null,
-    })
+      class_id: effectiveClassId || null,
+    }
 
-    if (error) {
-      setError(error.message)
-      setLoading(false)
+    if (existingStudent) {
+      const { error } = await supabase.from('students').update(payload).eq('id', existingStudent.id)
+      if (error) {
+        setError(error.message)
+        setLoading(false)
+      } else {
+        onSaved?.(existingStudent.id, payload)
+        markDirty('dashboard')
+        router.refresh()
+        onClose()
+      }
     } else {
-      markDirty('dashboard')
-      router.refresh()
-      onClose()
+      const { error } = await supabase.from('students').insert({ user_id: user.id, ...payload })
+      if (error) {
+        setError(error.message)
+        setLoading(false)
+      } else {
+        markDirty('dashboard')
+        router.refresh()
+        onClose()
+      }
     }
   }
 
@@ -97,7 +142,9 @@ export default function AddStudentModal({ classes: initialClasses = [], onClose 
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-xl border border-[#DFE1E6] shadow-2xl w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-bold text-[#172B4D]">Add student</h2>
+          <h2 className="text-base font-bold text-[#172B4D]">
+            {existingStudent ? 'Edit student' : 'Add student'}
+          </h2>
           <button
             onClick={onClose}
             className="text-[#6B778C] hover:text-[#172B4D] transition-colors p-1 rounded btn-press-subtle"
@@ -153,6 +200,7 @@ export default function AddStudentModal({ classes: initialClasses = [], onClose 
                 options={classOptions}
                 value={classId}
                 onChange={handleClassChange}
+                onDeleteItem={handleDeleteClass}
                 placeholder="No class"
               />
             </div>
@@ -212,7 +260,7 @@ export default function AddStudentModal({ classes: initialClasses = [], onClose 
               disabled={loading}
               className="flex-1 bg-[#0052CC] text-white py-2 rounded-lg text-sm font-semibold hover:bg-[#0065FF] disabled:opacity-50 transition-colors btn-press"
             >
-              {loading ? 'Adding…' : 'Add student'}
+              {loading ? 'Saving…' : existingStudent ? 'Save changes' : 'Add student'}
             </button>
           </div>
         </form>

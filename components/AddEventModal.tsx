@@ -68,7 +68,15 @@ export default function AddEventModal({
       setShowAddSubject(true)
     } else {
       setSubjectId(val)
+      setShowAddSubject(false)
+      setNewSubjectName('')
     }
+  }
+
+  async function handleDeleteSubject(deletedId: string) {
+    await supabase.from('subjects').delete().eq('id', deletedId)
+    setSubjects(prev => prev.filter(s => s.id !== deletedId))
+    if (subjectId === deletedId) setSubjectId('')
   }
 
   async function handleAddSubject() {
@@ -159,6 +167,7 @@ export default function AddEventModal({
                 options={subjectOptions}
                 value={subjectId}
                 onChange={handleSubjectChange}
+                onDeleteItem={handleDeleteSubject}
               />
             </div>
           </div>
