@@ -9,13 +9,12 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import { createClient } from '@/lib/supabase/client'
 import { Clipboard, Printer, Loader2, Check, X as XIcon, Sparkles, Circle, CheckCircle2 } from 'lucide-react'
-import type { ReportStatus } from '@/types'
 
 interface Props {
   studentName: string
   initialContent: string
   reportId: string
-  reportStatus?: ReportStatus
+  isDraft?: boolean
   onRequestRegenerate?: () => void
 }
 
@@ -70,18 +69,18 @@ const RefactorFlashExtension = Extension.create({
 export default function ReportEditor({
   initialContent,
   reportId,
-  reportStatus,
+  isDraft: initialIsDraft = true,
   onRequestRegenerate,
 }: Props) {
   const supabase = createClient()
 
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
-  const [status, setStatus] = useState<ReportStatus>(reportStatus ?? 'draft')
+  const [isDraft, setIsDraft] = useState<boolean>(initialIsDraft)
 
-  function toggleStatus() {
-    const newStatus: ReportStatus = status === 'draft' ? 'complete' : 'draft'
-    setStatus(newStatus)
-    supabase.from('reports').update({ status: newStatus }).eq('id', reportId)
+  async function toggleStatus() {
+    const newIsDraft = !isDraft
+    setIsDraft(newIsDraft)
+    await supabase.from('reports').update({ is_draft: newIsDraft }).eq('id', reportId)
   }
   const [refactoringLabel, setRefactoringLabel] = useState<string | null>(null)
   const [refactorError, setRefactorError] = useState('')
@@ -222,6 +221,9 @@ export default function ReportEditor({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+      if (typeof data.usageCount === 'number') {
+        window.dispatchEvent(new CustomEvent('ai-usage-updated', { detail: { count: data.usageCount } }))
+      }
       setPendingRefactor({ from: sel.from, to: sel.to, original: sel.selectedText, suggested: data.text })
       setBubbleMenuRect(null)
     } catch (err) {
@@ -283,14 +285,14 @@ export default function ReportEditor({
           {/* Status toggle */}
           <button
             onClick={toggleStatus}
-            title={status === 'complete' ? 'Mark as draft' : 'Mark as complete'}
+            title={isDraft ? 'Mark as complete' : 'Mark as draft'}
             className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold border transition-colors ${
-              status === 'complete'
+              !isDraft
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                 : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
             }`}
           >
-            {status === 'complete'
+            {!isDraft
               ? <><CheckCircle2 size={11} /> Complete</>
               : <><Circle size={11} /> Draft</>
             }

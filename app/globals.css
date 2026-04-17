@@ -70,6 +70,16 @@ button, [role="button"] {
   transform: scale(0.97);
 }
 
+/* ── New event pulse animation ───────────────────────────── */
+@keyframes event-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(0, 82, 204, 0.7), inset 0 0 0 2px rgba(0, 82, 204, 0.5); }
+  50%  { box-shadow: 0 0 0 8px rgba(0, 82, 204, 0.08), inset 0 0 0 2px rgba(0, 82, 204, 0.15); }
+  100% { box-shadow: 0 0 0 12px rgba(0, 82, 204, 0), inset 0 0 0 2px rgba(0, 82, 204, 0); }
+}
+.event-new {
+  animation: event-pulse 1.4s ease-out forwards;
+}
+
 /* ── TipTap editor ───────────────────────────────────────── */
 .tiptap-editor .ProseMirror {
   outline: none;

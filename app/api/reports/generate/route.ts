@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { anthropic } from '@/lib/anthropic'
-
-const DAILY_LIMIT = 200
+import { AI_DAILY_LIMIT } from '@/lib/ai-config'
+import { getResetCountdown } from '@/components/helpers/AIUsage'
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -22,9 +22,9 @@ export async function POST(request: Request) {
     .maybeSingle()
 
   const currentCount = usageRow?.count ?? 0
-  if (currentCount >= DAILY_LIMIT) {
+  if (currentCount >= AI_DAILY_LIMIT) {
     return NextResponse.json({
-      error: `You've reached today's limit of ${DAILY_LIMIT} AI requests. Usage resets at midnight UTC.`,
+      error: `You've reached today's limit of ${AI_DAILY_LIMIT} AI requests. ${getResetCountdown()}`,
       rateLimited: true,
     }, { status: 429 })
   }
@@ -156,7 +156,7 @@ ${profileContext}
           student_id: studentId,
           user_id: user.id,
           content: reportText,
-          status: 'draft', // AI-generated reports always start as draft
+          is_draft: true,
           generated_at: new Date().toISOString(),
           last_edited_at: new Date().toISOString(),
         },
@@ -173,7 +173,7 @@ ${profileContext}
       { onConflict: 'user_id,date' }
     ).then(() => {})
 
-    return NextResponse.json({ report, usageCount: currentCount + 1, dailyLimit: DAILY_LIMIT })
+    return NextResponse.json({ report, usageCount: currentCount + 1, dailyLimit: AI_DAILY_LIMIT })
   } catch (err) {
     console.error('Report generation error:', err)
     return NextResponse.json({ error: 'Failed to generate report. Please try again.' }, { status: 500 })

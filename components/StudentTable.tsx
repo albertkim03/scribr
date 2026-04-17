@@ -13,6 +13,7 @@ import AddEventModal from './AddEventModal'
 import ReportSection from './ReportSection'
 import Select from './Select'
 import ConfirmModal from './ConfirmModal'
+import Avatar from './Avatar'
 import { markDirty } from '@/lib/route-cache'
 import type { StudentWithStats, Subject, Class, Event, Sentiment, Report, Gender } from '@/types'
 
@@ -176,13 +177,16 @@ export default function StudentTable({ students, subjects, classes }: Props) {
   const [deletingStudentId, setDeletingStudentId] = useState<string | null>(null)
   const [confirmModal, setConfirmModal] = useState<{ message: string; confirmLabel?: string; onConfirm: () => void } | null>(null)
 
-  // Local mutable copies — updated optimistically so class deletions/edits reflect immediately without a full refresh
+  // Local mutable copies — updated optimistically so class/subject deletions/edits reflect immediately without a full refresh
   const [localClasses, setLocalClasses] = useState<Class[]>(classes)
   const [localStudents, setLocalStudents] = useState<StudentWithStats[]>(students)
-  useEffect(() => { setLocalClasses(classes) }, [classes])    // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { setLocalStudents(students) }, [students]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [localSubjects, setLocalSubjects] = useState<Subject[]>(subjects)
+  useEffect(() => { setLocalClasses(classes) }, [classes])       // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setLocalStudents(students) }, [students])    // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setLocalSubjects(subjects) }, [subjects])    // eslint-disable-line react-hooks/exhaustive-deps
 
   const [editingStudent, setEditingStudent] = useState<StudentWithStats | null>(null)
+  const [newestEventId, setNewestEventId] = useState<string | null>(null)
 
   function handleClassDeleted(classId: string) {
     setLocalClasses(prev => prev.filter(c => c.id !== classId))
@@ -199,6 +203,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
   }
 
   function handleSubjectDeleted(subjectId: string) {
+    setLocalSubjects(prev => prev.filter(s => s.id !== subjectId))
     setLocalStudents(prev => prev.map(s => ({
       ...s,
       events: s.events.map(e =>
@@ -217,6 +222,8 @@ export default function StudentTable({ students, subjects, classes }: Props) {
         last_event_date: event.created_at,
       }
     }))
+    setNewestEventId(event.id)
+    setTimeout(() => setNewestEventId(null), 1500)
   }
 
   function handleEventUpdated(studentId: string, event: Event) {
@@ -483,17 +490,12 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                     }`}
                   />
                   {/* Avatar */}
-                  {student.avatar_url ? (
-                    <img
-                      src={student.avatar_url}
-                      alt=""
-                      className="w-8 h-8 rounded-full object-cover shrink-0 border border-[#DFE1E6]"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-[#DFE1E6] flex items-center justify-center text-[#42526E] text-xs font-black shrink-0">
-                      {student.first_name[0]}{student.last_name[0]}
-                    </div>
-                  )}
+                  <Avatar
+                    firstName={student.first_name}
+                    lastName={student.last_name}
+                    avatarUrl={student.avatar_url}
+                    size={32}
+                  />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-[#172B4D] text-sm">
@@ -595,11 +597,12 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                           : FALLBACK_COLOR
                         const { Icon: SentimentIcon } = SENTIMENT_CONFIG[event.sentiment]
                         const cardStyle = SENTIMENT_CARD[event.sentiment]
+                        const isNew = event.id === newestEventId
                         return (
                           <div
                             key={event.id}
                             onClick={() => setEditingEvent({ event, student })}
-                            className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 cursor-pointer hover:shadow-sm transition-all ${cardStyle.bg} ${cardStyle.border}`}
+                            className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 cursor-pointer hover:shadow-sm transition-all ${cardStyle.bg} ${cardStyle.border} ${isNew ? 'event-new' : ''}`}
                           >
                             {/* Subject badge */}
                             <div className="shrink-0 pt-0.5">
@@ -663,11 +666,12 @@ export default function StudentTable({ students, subjects, classes }: Props) {
                             : FALLBACK_COLOR
                           const { Icon: SentimentIcon } = SENTIMENT_CONFIG[event.sentiment]
                           const cardStyle = SENTIMENT_CARD[event.sentiment]
+                          const isNew = event.id === newestEventId
                           return (
                             <div
                               key={event.id}
                               onClick={() => setEditingEvent({ event, student })}
-                              className={`relative rounded-lg border p-2.5 cursor-pointer hover:shadow-sm transition-all ${cardStyle.bg} ${cardStyle.border}`}
+                              className={`relative rounded-lg border p-2.5 cursor-pointer hover:shadow-sm transition-all ${cardStyle.bg} ${cardStyle.border} ${isNew ? 'event-new' : ''}`}
                             >
                               {/* Sentiment icon — top-right corner */}
                               <SentimentIcon size={10} className={`absolute top-2 right-2 ${cardStyle.iconClass} opacity-60`} />
@@ -688,7 +692,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
 
                     {/* Right: report editor */}
                     <div className="flex-1 overflow-y-auto p-5" style={{ maxHeight: '520px' }}>
-                      <InlineReportPanel student={student} subjects={subjects} profileNotes={savedNotes[student.id] ?? student.profile_notes} />
+                      <InlineReportPanel student={student} subjects={localSubjects} profileNotes={savedNotes[student.id] ?? student.profile_notes} />
                     </div>
                   </div>
                 )}
@@ -720,7 +724,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
         <AddEventModal
           studentId={addEventStudent.id}
           studentName={`${addEventStudent.first_name} ${addEventStudent.last_name}`}
-          subjects={subjects}
+          subjects={localSubjects}
           onSubjectDeleted={handleSubjectDeleted}
           onSaved={event => handleEventAdded(addEventStudent.id, event)}
           onClose={() => setAddEventStudent(null)}
@@ -730,7 +734,7 @@ export default function StudentTable({ students, subjects, classes }: Props) {
         <AddEventModal
           studentId={editingEvent.student.id}
           studentName={`${editingEvent.student.first_name} ${editingEvent.student.last_name}`}
-          subjects={subjects}
+          subjects={localSubjects}
           existingEvent={editingEvent.event}
           onSubjectDeleted={handleSubjectDeleted}
           onSaved={event => handleEventUpdated(editingEvent.student.id, event)}

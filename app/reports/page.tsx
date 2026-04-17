@@ -13,7 +13,7 @@ export default async function ReportsPage() {
   const [reportsResult, subjectsResult, studentsResult] = await Promise.all([
     supabase
       .from('reports')
-      .select('*, students(first_name, last_name, gender, profile_notes, class_id, classes(name), events(*, subjects(*)))')
+      .select('*, students(first_name, last_name, gender, profile_notes, avatar_url, class_id, classes(name), events(*, subjects(*)))')
       .eq('user_id', user.id)
       .order('last_edited_at', { ascending: false }),
     supabase
@@ -22,7 +22,7 @@ export default async function ReportsPage() {
       .order('name'),
     supabase
       .from('students')
-      .select('id, first_name, last_name, profile_notes, class_id, classes(name)')
+      .select('id, first_name, last_name, profile_notes, avatar_url, class_id, classes(name)')
       .eq('user_id', user.id)
       .order('last_name'),
   ])

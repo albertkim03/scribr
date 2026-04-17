@@ -124,6 +124,9 @@ export default function ReportSection({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+      if (typeof data.usageCount === 'number') {
+        window.dispatchEvent(new CustomEvent('ai-usage-updated', { detail: { count: data.usageCount } }))
+      }
       setPhase({ type: 'animating', text: data.report.content, reportId: data.report.id })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate. Please try again.')
@@ -143,6 +146,9 @@ export default function ReportSection({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+      if (typeof data.usageCount === 'number') {
+        window.dispatchEvent(new CustomEvent('ai-usage-updated', { detail: { count: data.usageCount } }))
+      }
       setPhase({ type: 'animating', text: data.report.content, reportId: data.report.id })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to regenerate. Please try again.')
@@ -163,7 +169,7 @@ export default function ReportSection({
         student_id: studentId,
         user_id: '',
         content: text,
-        status: 'draft',
+        is_draft: true,
         generated_at: new Date().toISOString(),
         last_edited_at: new Date().toISOString(),
       },
@@ -239,11 +245,17 @@ export default function ReportSection({
 
   return (
     <>
+      {error && (
+        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-3">
+          {error}
+          <button onClick={() => setError('')} className="ml-2 text-red-400 hover:text-red-600 float-right">×</button>
+        </p>
+      )}
       <ReportEditor
         studentName={studentName}
         initialContent={currentReport.content}
         reportId={currentReport.id}
-        reportStatus={currentReport.status}
+        isDraft={currentReport.is_draft}
         onRequestRegenerate={() => setPhase({ type: 'confirm-regenerate', report: currentReport })}
       />
       {phase.type === 'confirm-regenerate' && (

@@ -17,9 +17,34 @@ export default function AvatarUpload({ currentUrl, initials, onFileSelected, siz
 
   function processFile(file: File) {
     if (!file.type.startsWith('image/')) return
+    // Show preview immediately from original
     const url = URL.createObjectURL(file)
     setPreview(url)
-    onFileSelected(file)
+    // Compress to max 300px WebP in the background, then notify parent
+    compressImage(file).then(compressed => onFileSelected(compressed))
+  }
+
+  function compressImage(file: File): Promise<File> {
+    return new Promise(resolve => {
+      const img = new Image()
+      img.onload = () => {
+        const MAX = 300
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+        const w = Math.round(img.width * scale)
+        const h = Math.round(img.height * scale)
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+        canvas.toBlob(
+          blob => resolve(blob ? new File([blob], 'avatar.webp', { type: 'image/webp' }) : file),
+          'image/webp',
+          0.8
+        )
+      }
+      img.onerror = () => resolve(file)
+      img.src = URL.createObjectURL(file)
+    })
   }
 
   function handleDrop(e: React.DragEvent) {

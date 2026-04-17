@@ -7,13 +7,15 @@ import { createClient } from '@/lib/supabase/client'
 import { markDirty } from '@/lib/route-cache'
 import ReportSection from './ReportSection'
 import GenerateReportModal from './GenerateReportModal'
-import type { Event, Report, ReportStatus, Subject } from '@/types'
+import Avatar from './Avatar'
+import type { Event, Report, Subject } from '@/types'
 
 interface StudentInfo {
   first_name: string
   last_name: string
   gender: string
   profile_notes?: string | null
+  avatar_url?: string | null
   class_id: string | null
   classes: { name: string } | null
   events: Event[]
@@ -28,6 +30,7 @@ interface StudentNoReport {
   first_name: string
   last_name: string
   profile_notes: string | null
+  avatar_url?: string | null
   class_id: string | null
   // Supabase returns embedded belongs-to as array at type level; handle both at runtime
   classes: { name: string } | { name: string }[] | null
@@ -39,29 +42,8 @@ interface Props {
   studentsWithoutReport: StudentNoReport[]
 }
 
-function getInitials(first: string, last: string) {
-  return `${first[0] ?? ''}${last[0] ?? ''}`.toUpperCase()
-}
-
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-}
-
-const AVATAR_COLORS = [
-  'bg-blue-100 text-blue-700',
-  'bg-violet-100 text-violet-700',
-  'bg-emerald-100 text-emerald-700',
-  'bg-amber-100 text-amber-700',
-  'bg-rose-100 text-rose-700',
-  'bg-cyan-100 text-cyan-700',
-  'bg-indigo-100 text-indigo-700',
-  'bg-orange-100 text-orange-700',
-]
-
-function hashColor(name: string) {
-  let h = 0
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
-  return AVATAR_COLORS[h % AVATAR_COLORS.length]
 }
 
 function ReportCard({
@@ -93,18 +75,17 @@ function ReportCard({
   if (!student) return null
 
   const fullName = `${student.first_name} ${student.last_name}`
-  const avatarColor = hashColor(fullName)
   const displayReport = liveReport ?? report
-  const status: ReportStatus = displayReport.status ?? 'draft'
+  const isDraft: boolean = displayReport.is_draft ?? true
   // Preview: strip HTML and trim to 160 chars
   const plainPreview = report.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
   const preview = plainPreview.slice(0, 160) + (plainPreview.length > 160 ? '…' : '')
 
-  function toggleStatus(e: React.MouseEvent) {
+  async function toggleStatus(e: React.MouseEvent) {
     e.stopPropagation()
-    const newStatus: ReportStatus = status === 'draft' ? 'complete' : 'draft'
-    setLiveReport(prev => ({ ...(prev ?? report), status: newStatus }))
-    supabase.from('reports').update({ status: newStatus }).eq('id', report.id)
+    const newIsDraft = !isDraft
+    setLiveReport(prev => ({ ...(prev ?? report), is_draft: newIsDraft }))
+    await supabase.from('reports').update({ is_draft: newIsDraft }).eq('id', report.id)
   }
 
   return (
@@ -115,9 +96,7 @@ function ReportCard({
         onClick={onToggle}
       >
         {/* Avatar */}
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${avatarColor}`}>
-          {getInitials(student.first_name, student.last_name)}
-        </div>
+        <Avatar firstName={student.first_name} lastName={student.last_name} avatarUrl={student.avatar_url} size={36} />
 
         {/* Student info */}
         <div className="flex-1 min-w-0">
@@ -142,14 +121,14 @@ function ReportCard({
         <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
           <button
             onClick={toggleStatus}
-            title={status === 'complete' ? 'Mark as draft' : 'Mark as complete'}
+            title={isDraft ? 'Mark as complete' : 'Mark as draft'}
             className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold border transition-colors ${
-              status === 'complete'
+              !isDraft
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                 : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
             }`}
           >
-            {status === 'complete'
+            {!isDraft
               ? <><CheckCircle2 size={11} /> Complete</>
               : <><Circle size={11} /> Draft</>
             }
@@ -190,16 +169,13 @@ function NoReportRow({
   isLoading: boolean
 }) {
   const fullName = `${student.first_name} ${student.last_name}`
-  const avatarColor = hashColor(fullName)
   const className = Array.isArray(student.classes)
     ? student.classes[0]?.name ?? null
     : student.classes?.name ?? null
   return (
     <div className="bg-amber-50 rounded-xl border border-amber-200 shadow-sm">
       <div className="flex items-center gap-3 px-4 py-3.5">
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${avatarColor}`}>
-          {getInitials(student.first_name, student.last_name)}
-        </div>
+        <Avatar firstName={student.first_name} lastName={student.last_name} avatarUrl={student.avatar_url} size={36} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-bold text-[#172B4D] text-sm">{fullName}</span>

@@ -77,8 +77,7 @@ export default function RegenerateModal({ events, subjects, profileNotes, onRege
   }
 
   function handleSubmit() {
-    const trimmed = instruction.trim()
-    if (!trimmed) return
+    const trimmed = instruction.trim() || 'Try again with different wording.'
     onRegenerate(trimmed, [...selectedIds], length, includeProfileNotes)
     // Do NOT call onClose() — parent's phase transition dismisses this modal
   }
@@ -288,7 +287,7 @@ export default function RegenerateModal({ events, subjects, profileNotes, onRege
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={!instruction.trim() || selectedIds.size === 0}
+                disabled={selectedIds.size === 0 && !(includeProfileNotes && hasNotes)}
                 className="flex-1 flex items-center justify-center gap-2 bg-white border border-purple-200 py-2.5 rounded-lg text-sm font-bold hover:border-purple-400 hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition-all btn-press"
               >
                 <Sparkles size={14} className="text-violet-500" />

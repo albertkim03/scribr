@@ -7,13 +7,13 @@ import { createClient } from '@/lib/supabase/client'
 import { Users, FileText, User, Sparkles } from 'lucide-react'
 import ScribrLogo from './ScribrLogo'
 import { isDirty, clearDirty } from '@/lib/route-cache'
+import { AI_DAILY_LIMIT } from '@/lib/ai-config'
+import { getResetCountdown } from './helpers/AIUsage'
 
 const NAV_TABS = [
   { href: '/dashboard', label: 'Students', Icon: Users },
   { href: '/reports',   label: 'Reports',  Icon: FileText },
 ]
-
-const DAILY_LIMIT = 200
 
 export default function Nav() {
   const router = useRouter()
@@ -38,6 +38,16 @@ export default function Nav() {
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Listen for AI usage updates dispatched by generate/regenerate/refactor actions
+  useEffect(() => {
+    function handleUsageUpdate(e: Event) {
+      const count = (e as CustomEvent<{ count: number }>).detail.count
+      setAiUsage(count)
+    }
+    window.addEventListener('ai-usage-updated', handleUsageUpdate)
+    return () => window.removeEventListener('ai-usage-updated', handleUsageUpdate)
+  }, [])
+
   // If the current route was marked dirty by a mutation, force a fresh fetch.
   useEffect(() => {
     const routeKey = pathname === '/dashboard' ? 'dashboard'
@@ -54,10 +64,10 @@ export default function Nav() {
     router.push('/login')
   }
 
-  const usagePct = aiUsage !== null ? Math.min(100, (aiUsage / DAILY_LIMIT) * 100) : 0
+  const usagePct = aiUsage !== null ? Math.min(100, (aiUsage / AI_DAILY_LIMIT) * 100) : 0
   const barColor = aiUsage !== null
-    ? aiUsage >= DAILY_LIMIT * 0.9 ? '#EF4444'
-    : aiUsage >= DAILY_LIMIT * 0.7 ? '#F59E0B'
+    ? aiUsage >= AI_DAILY_LIMIT * 0.9 ? '#EF4444'
+    : aiUsage >= AI_DAILY_LIMIT * 0.7 ? '#F59E0B'
     : '#3B82F6'
     : '#3B82F6'
 
@@ -125,7 +135,7 @@ export default function Nav() {
                     </div>
                     <p className="text-2xl font-black text-[#0052CC] leading-none mb-0.5">
                       {aiUsage}
-                      <span className="text-sm text-[#6B778C] font-semibold"> / {DAILY_LIMIT}</span>
+                      <span className="text-sm text-[#6B778C] font-semibold"> / {AI_DAILY_LIMIT}</span>
                     </p>
                     <p className="text-xs text-[#6B778C] mb-2">requests used</p>
                     <div className="h-2 bg-[#F4F5F7] rounded-full overflow-hidden">
@@ -134,10 +144,10 @@ export default function Nav() {
                         style={{ width: `${usagePct}%`, backgroundColor: barColor }}
                       />
                     </div>
-                    <p className="text-xs text-[#6B778C] mt-2">Resets at midnight UTC</p>
-                    {aiUsage >= DAILY_LIMIT * 0.9 && (
+                    <p className="text-xs text-[#6B778C] mt-2">{getResetCountdown()}</p>
+                    {aiUsage >= AI_DAILY_LIMIT * 0.9 && (
                       <p className="text-xs font-semibold text-red-600 mt-1.5">
-                        {aiUsage >= DAILY_LIMIT ? 'Limit reached for today.' : 'Almost at daily limit.'}
+                        {aiUsage >= AI_DAILY_LIMIT ? 'Limit reached for today.' : 'Almost at daily limit.'}
                       </p>
                     )}
                   </div>

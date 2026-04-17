@@ -67,7 +67,7 @@ export default function GenerateReportModal({ studentName, events, subjects, pro
   }
 
   function handleGenerate() {
-    if (selectedIds.size === 0) return
+    if (selectedIds.size === 0 && !(includeProfileNotes && hasNotes)) return
     onGenerate([...selectedIds], length, includeProfileNotes)
     // Do NOT call onClose() — parent's phase transition dismisses this modal
   }

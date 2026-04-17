@@ -1,6 +1,8 @@
--- Report status: 'draft' | 'complete'
+-- Report draft flag (replaces old TEXT status column)
 ALTER TABLE public.reports
-  ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'draft';
+  DROP COLUMN IF EXISTS status;
+ALTER TABLE public.reports
+  ADD COLUMN IF NOT EXISTS is_draft BOOLEAN NOT NULL DEFAULT true;
 
 -- Student avatar
 ALTER TABLE public.students
@@ -15,10 +17,13 @@ CREATE TABLE IF NOT EXISTS public.ai_usage (
 );
 
 ALTER TABLE public.ai_usage ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "select_own_ai_usage" ON public.ai_usage;
 CREATE POLICY "select_own_ai_usage" ON public.ai_usage
   FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "insert_own_ai_usage" ON public.ai_usage;
 CREATE POLICY "insert_own_ai_usage" ON public.ai_usage
   FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "update_own_ai_usage" ON public.ai_usage;
 CREATE POLICY "update_own_ai_usage" ON public.ai_usage
   FOR UPDATE USING (auth.uid() = user_id);
 
@@ -29,11 +34,15 @@ INSERT INTO storage.buckets (id, name, public)
   VALUES ('student-avatars', 'student-avatars', true)
   ON CONFLICT DO NOTHING;
 
+DROP POLICY IF EXISTS "anyone_can_read_avatars" ON storage.objects;
 CREATE POLICY "anyone_can_read_avatars" ON storage.objects
   FOR SELECT USING (bucket_id = 'student-avatars');
+DROP POLICY IF EXISTS "auth_can_upload_avatars" ON storage.objects;
 CREATE POLICY "auth_can_upload_avatars" ON storage.objects
   FOR INSERT WITH CHECK (bucket_id = 'student-avatars' AND auth.uid() IS NOT NULL);
+DROP POLICY IF EXISTS "auth_can_update_avatars" ON storage.objects;
 CREATE POLICY "auth_can_update_avatars" ON storage.objects
   FOR UPDATE USING (bucket_id = 'student-avatars' AND auth.uid() IS NOT NULL);
+DROP POLICY IF EXISTS "auth_can_delete_avatars" ON storage.objects;
 CREATE POLICY "auth_can_delete_avatars" ON storage.objects
   FOR DELETE USING (bucket_id = 'student-avatars' AND auth.uid() IS NOT NULL);
