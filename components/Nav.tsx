@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Users, FileText, User, Sparkles } from 'lucide-react'
+import { Users, User, Sparkles } from 'lucide-react'
 import ScribrLogo from './ScribrLogo'
 import { isDirty, clearDirty } from '@/lib/route-cache'
 import { AI_DAILY_LIMIT } from '@/lib/ai-config'
@@ -12,7 +12,6 @@ import { getResetCountdown } from './helpers/AIUsage'
 
 const NAV_TABS = [
   { href: '/dashboard', label: 'Students', Icon: Users },
-  { href: '/reports',   label: 'Reports',  Icon: FileText },
 ]
 
 export default function Nav() {
@@ -50,9 +49,7 @@ export default function Nav() {
 
   // If the current route was marked dirty by a mutation, force a fresh fetch.
   useEffect(() => {
-    const routeKey = pathname === '/dashboard' ? 'dashboard'
-      : pathname === '/reports' ? 'reports'
-      : null
+    const routeKey = pathname === '/dashboard' ? 'dashboard' : null
     if (routeKey && isDirty(routeKey)) {
       clearDirty(routeKey)
       router.refresh()

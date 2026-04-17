@@ -278,9 +278,9 @@ export default function ReportEditor({
   const menuRect = savedRectRef.current ?? bubbleMenuRect
 
   return (
-    <div>
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-4 mb-3 no-print flex-wrap">
+      <div className="flex items-center justify-between gap-4 mb-3 no-print flex-wrap shrink-0">
         <div className="flex items-center gap-2">
           {/* Status toggle */}
           <button

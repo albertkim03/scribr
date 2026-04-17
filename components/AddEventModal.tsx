@@ -7,6 +7,7 @@ import { X, Plus } from 'lucide-react'
 import Select from './Select'
 import type { Subject, Sentiment, Event } from '@/types'
 import { markDirty } from '@/lib/route-cache'
+import { encodeSentiment } from '@/lib/sentiment'
 
 interface Props {
   studentId: string
@@ -119,7 +120,7 @@ export default function AddEventModal({
       student_id: studentId,
       user_id: session.user.id,
       subject_id: subjectId || null,
-      sentiment,
+      sentiment: encodeSentiment(sentiment), // store as INT2 in DB
       description: description.trim(),
     }
 
@@ -131,7 +132,9 @@ export default function AddEventModal({
       } else {
         const updatedEvent: Event = {
           ...existingEvent,
-          ...payload,
+          subject_id: subjectId || null,
+          sentiment, // use the string value from state — already the correct type
+          description: description.trim(),
           subjects: subjects.find(s => s.id === subjectId) ?? null,
         }
         onSaved?.(updatedEvent)
@@ -151,6 +154,7 @@ export default function AddEventModal({
       } else {
         const eventWithSubject: Event = {
           ...newEvent,
+          sentiment, // override DB int with the string from state
           subjects: subjects.find(s => s.id === subjectId) ?? null,
         }
         onSaved?.(eventWithSubject)

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { anthropic } from '@/lib/anthropic'
 import { AI_DAILY_LIMIT } from '@/lib/ai-config'
 import { getResetCountdown } from '@/components/helpers/AIUsage'
+import { parseSentiment } from '@/lib/sentiment'
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -53,11 +54,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'No events logged and no general comments for this student.' }, { status: 400 })
   }
 
-  // Filter to selected events (if provided), otherwise use all
-  const events =
+  // Filter to selected events (if provided), otherwise use all; convert INT2 sentiment to string
+  const rawEvents =
     selectedEventIds && selectedEventIds.length > 0
       ? (allEvents ?? []).filter(e => selectedEventIds.includes(e.id))
       : (allEvents ?? [])
+  const events = rawEvents.map(e => ({ ...e, sentiment: parseSentiment(e.sentiment as number) }))
 
   if (events.length === 0 && !canUseNotes) {
     return NextResponse.json({ error: 'No events selected and no general comments to use.' }, { status: 400 })

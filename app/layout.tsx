@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import NavWrapper from './NavWrapper'
 
 export const metadata: Metadata = {
   title: 'Scribr',
@@ -13,7 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen antialiased">{children}</body>
+      <body className="min-h-screen antialiased">
+        <NavWrapper />
+        {children}
+      </body>
     </html>
   )
 }

@@ -244,9 +244,9 @@ export default function ReportSection({
   if (!currentReport) return null
 
   return (
-    <>
+    <div className="flex flex-col flex-1 min-h-0">
       {error && (
-        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-3">
+        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-3 shrink-0">
           {error}
           <button onClick={() => setError('')} className="ml-2 text-red-400 hover:text-red-600 float-right">×</button>
         </p>
@@ -267,6 +267,6 @@ export default function ReportSection({
           onClose={() => setPhase({ type: 'editing', report: phase.report })}
         />
       )}
-    </>
+    </div>
   )
 }

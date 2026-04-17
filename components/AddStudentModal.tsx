@@ -22,6 +22,7 @@ interface Props {
   classes?: Class[]
   existingStudent?: ExistingStudent
   onClassDeleted?: (classId: string) => void
+  onClassAdded?: (cls: Class) => void
   /** Called after a new student is created — parent can add them to local state immediately */
   onCreated?: (student: StudentWithStats) => void
   /** Called after an existing student is saved — parent updates local state immediately */
@@ -37,6 +38,7 @@ export default function AddStudentModal({
   classes: initialClasses = [],
   existingStudent,
   onClassDeleted,
+  onClassAdded,
   onCreated,
   onSaved,
   onClose,
@@ -86,6 +88,7 @@ export default function AddStudentModal({
     if (newClass) {
       setLocalClasses(prev => [...prev, newClass as Class])
       setClassId(newClass.id)
+      onClassAdded?.(newClass as Class)
     }
     setSavingClass(false)
     setNewClassName('')
@@ -128,7 +131,10 @@ export default function AddStudentModal({
         .insert({ user_id: session.user.id, name: newClassName.trim() })
         .select()
         .single()
-      if (newClass) effectiveClassId = newClass.id
+      if (newClass) {
+        effectiveClassId = newClass.id
+        onClassAdded?.(newClass as Class)
+      }
     }
 
     const basePayload = {

@@ -62,7 +62,7 @@ export default function Select({
       </button>
 
       {open && (
-        <div className="absolute z-[200] top-full mt-1 w-full bg-white border border-[#DFE1E6] rounded-lg shadow-xl overflow-hidden">
+        <div className="absolute z-[200] top-full mt-1 w-full bg-white border border-[#DFE1E6] rounded-lg shadow-xl overflow-x-hidden overflow-y-auto max-h-56">
           {options.map((option, i) => {
             const canDelete = !!onDeleteItem && !option.isAction && option.value !== ''
             return (

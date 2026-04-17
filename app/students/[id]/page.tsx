@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import Nav from '@/components/Nav'
+import { withSentiment } from '@/lib/sentiment'
 import ProfileNotes from '@/components/ProfileNotes'
 import TrelloEventBoard from '@/components/TrelloEventBoard'
 import ReportSection from '@/components/ReportSection'
@@ -29,7 +29,7 @@ export default async function StudentPage({ params }: Props) {
   if (!studentResult.data) notFound()
 
   const student = studentResult.data
-  const events = eventsResult.data ?? []
+  const events = (eventsResult.data ?? []).map(withSentiment)
   const subjects = subjectsResult.data ?? []
   const report = reportResult.data ?? null
   const studentClass = student.classes as { id: string; name: string } | null | undefined
@@ -41,7 +41,6 @@ export default async function StudentPage({ params }: Props) {
 
   return (
     <>
-      <Nav />
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
 
         {/* Back button */}
@@ -141,3 +140,4 @@ export default async function StudentPage({ params }: Props) {
     </>
   )
 }
+
