@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Users, User, Sparkles } from 'lucide-react'
+import { Users, User, Sparkles, BadgeQuestionMark } from 'lucide-react'
 import ScribrLogo from './ScribrLogo'
 import { isDirty, clearDirty } from '@/lib/route-cache'
 import { AI_DAILY_LIMIT } from '@/lib/ai-config'
@@ -12,6 +12,7 @@ import { getResetCountdown } from './helpers/AIUsage'
 
 const NAV_TABS = [
   { href: '/dashboard', label: 'Students', Icon: Users },
+  { href: '/more_features', label: 'New features????', Icon: BadgeQuestionMark}
 ]
 
 export default function Nav() {
