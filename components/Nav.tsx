@@ -12,7 +12,7 @@ import { getResetCountdown } from './helpers/AIUsage'
 
 const NAV_TABS = [
   { href: '/dashboard', label: 'Students', Icon: Users },
-  { href: '/more_features', label: 'New features????', Icon: BadgeQuestionMark}
+  { href: '/more_features', label: 'New features???', Icon: BadgeQuestionMark}
 ]
 
 export default function Nav() {
