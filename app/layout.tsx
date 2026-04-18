@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import NavWrapper from './NavWrapper'
+import { SpeedInsights } from '@vercel/speed-insights/next'
+import { Analytics } from '@vercel/analytics/react'
 
 export const metadata: Metadata = {
   title: 'Scribr',
@@ -17,6 +19,8 @@ export default function RootLayout({
       <body className="min-h-screen antialiased">
         <NavWrapper />
         {children}
+        <SpeedInsights />
+        <Analytics />
       </body>
     </html>
   )

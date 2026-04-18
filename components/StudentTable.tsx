@@ -8,7 +8,8 @@ import {
   Plus, Search,
   ThumbsUp, Minus, ThumbsDown,
   GraduationCap, X, Loader2, Sparkles, Pencil, Trash2,
-  ChevronLeft, ChevronRight, Clock, CheckCircle2, Ban,
+  ChevronLeft, ChevronRight, ChevronDown, Clock, CheckCircle2, Ban,
+  Pin, PinOff,
 } from 'lucide-react'
 import AddStudentModal from './AddStudentModal'
 import AddEventModal from './AddEventModal'
@@ -257,6 +258,14 @@ export default function StudentTable({ students, subjects, classes, reportStatus
   useEffect(() => { setLocalSubjects(subjects) }, [subjects])
   useEffect(() => { setLocalReportStatuses(reportStatuses) }, [reportStatuses])
 
+  // ── Pinned students ──────────────────────────────────────────
+  const [localPinnedIds, setLocalPinnedIds] = useState<Set<string>>(
+    new Set(students.filter(s => s.is_pinned).map(s => s.id))
+  )
+
+  // ── Collapsible class groups ──────────────────────────────────
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(new Set())
+
   // ── Animation ────────────────────────────────────────────────
   const [newestEventId, setNewestEventId] = useState<string | null>(null)
   const [newestStudentId, setNewestStudentId] = useState<string | null>(null)
@@ -347,6 +356,26 @@ export default function StudentTable({ students, subjects, classes, reportStatus
   function handleReportStatusChanged(isDraft: boolean) {
     if (!selectedStudentId) return
     setLocalReportStatuses(prev => ({ ...prev, [selectedStudentId]: isDraft }))
+  }
+
+  async function handlePinToggle(studentId: string) {
+    const isPinned = localPinnedIds.has(studentId)
+    setLocalPinnedIds(prev => {
+      const next = new Set(prev)
+      if (isPinned) next.delete(studentId)
+      else next.add(studentId)
+      return next
+    })
+    await supabase.from('students').update({ is_pinned: !isPinned }).eq('id', studentId)
+  }
+
+  function toggleGroupCollapse(groupKey: string) {
+    setCollapsedGroupIds(prev => {
+      const next = new Set(prev)
+      if (next.has(groupKey)) next.delete(groupKey)
+      else next.add(groupKey)
+      return next
+    })
   }
 
   function handleSubjectDeleted(subjectId: string) {
@@ -449,18 +478,28 @@ export default function StudentTable({ students, subjects, classes, reportStatus
   })
 
   // ── Grouping ─────────────────────────────────────────────────
-  interface StudentGroup { classId: string | null; className: string | null; students: StudentWithStats[] }
+  interface StudentGroup {
+    classId: string | null
+    className: string | null
+    students: StudentWithStats[]
+    isPinnedGroup?: boolean
+  }
   const sortAlpha = (arr: StudentWithStats[]) =>
     [...arr].sort((a, b) => a.last_name.localeCompare(b.last_name) || a.first_name.localeCompare(b.first_name))
 
   const studentGroups: StudentGroup[] = (() => {
     const sorted = sortAlpha(filtered)
-    // Show flat list when any filter is active, or when no classes exist
+    const pinned = sorted.filter(s => localPinnedIds.has(s.id))
+    const unpinned = sorted.filter(s => !localPinnedIds.has(s.id))
+
     if (activeClassIds.size > 0 || localClasses.length === 0) {
-      return [{ classId: null, className: null, students: sorted }]
+      const groups: StudentGroup[] = []
+      if (pinned.length > 0) groups.push({ classId: '__pinned__', className: 'Pinned', students: pinned, isPinnedGroup: true })
+      if (unpinned.length > 0) groups.push({ classId: null, className: null, students: unpinned })
+      return groups
     }
     const map = new Map<string | null, StudentWithStats[]>()
-    for (const s of sorted) {
+    for (const s of unpinned) {
       const key = s.class_id
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(s)
@@ -470,10 +509,13 @@ export default function StudentTable({ students, subjects, classes, reportStatus
       .sort((a, b) => a.name.localeCompare(b.name))
       .map(c => ({ classId: c.id, className: c.name, students: map.get(c.id)! }))
     const unassigned = map.get(null) ?? []
-    if (unassigned.length > 0) result.push({ classId: null, className: null, students: unassigned })
+    if (unassigned.length > 0) result.push({ classId: null, className: 'Unassigned', students: unassigned })
+    if (pinned.length > 0) return [{ classId: '__pinned__', className: 'Pinned', students: pinned, isPinnedGroup: true }, ...result]
     return result
   })()
-  const showGroupHeaders = activeClassIds.size === 0 && localClasses.length > 0 && studentGroups.length > 1
+  const showGroupHeaders =
+    localPinnedIds.size > 0 ||
+    (activeClassIds.size === 0 && localClasses.length > 0 && studentGroups.length > 1)
 
   const selectedStudent = localStudents.find(s => s.id === selectedStudentId) ?? null
   const effectiveClass = selectedStudent?.class_id
@@ -608,49 +650,83 @@ export default function StudentTable({ students, subjects, classes, reportStatus
                 <div className="p-4 text-center text-xs text-[#6B778C]">No students match.</div>
               ) : (
                 <div className="p-2 space-y-0.5">
-                  {studentGroups.map(group => (
-                    <Fragment key={group.classId ?? '__none__'}>
-                      {showGroupHeaders && (
-                        <div className="flex items-center gap-1.5 px-2 pt-2 pb-1">
-                          <GraduationCap size={9} className="text-[#42526E] shrink-0" />
-                          <span className="text-xs font-bold text-[#42526E] uppercase tracking-wide truncate">
-                            {group.className ?? 'Unassigned'}
-                          </span>
-                        </div>
-                      )}
-                      {group.students.map(student => {
-                        const isSelected = selectedStudentId === student.id
-                        const isNewest = student.id === newestStudentId
-                        return (
-                          <div
-                            key={student.id}
-                            onClick={() => setSelectedStudentId(student.id)}
-                            className={`flex items-center gap-2.5 px-2 py-2 rounded-lg cursor-pointer transition-colors ${
-                              isSelected
-                                ? 'bg-[#DEEBFF] border border-blue-200'
-                                : 'hover:bg-[#F4F5F7] border border-transparent'
-                            } ${isNewest ? 'event-new' : ''}`}
+                  {studentGroups.map(group => {
+                    const groupKey = group.classId ?? '__none__'
+                    const isCollapsed = collapsedGroupIds.has(groupKey)
+                    return (
+                      <Fragment key={groupKey}>
+                        {showGroupHeaders && group.className !== null && (
+                          <button
+                            onClick={() => toggleGroupCollapse(groupKey)}
+                            className="w-full flex items-center gap-1.5 px-2 pt-2 pb-1 hover:bg-[#F4F5F7] rounded-lg transition-colors"
                           >
-                            <Avatar
-                              firstName={student.first_name}
-                              lastName={student.last_name}
-                              avatarUrl={student.avatar_url}
-                              size={30}
+                            <ChevronDown
+                              size={10}
+                              className={`text-[#42526E] transition-transform duration-150 shrink-0 ${isCollapsed ? '-rotate-90' : ''}`}
                             />
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-xs font-bold truncate ${isSelected ? 'text-[#0052CC]' : 'text-[#172B4D]'}`}>
-                                {student.first_name} {student.last_name}
-                              </p>
-                              <p className="text-xs text-[#6B778C]">
-                                {student.event_count} {student.event_count === 1 ? 'event' : 'events'}
-                              </p>
+                            {group.isPinnedGroup
+                              ? <Pin size={9} className="text-[#0052CC] shrink-0" />
+                              : group.classId !== null
+                                ? <GraduationCap size={9} className="text-[#42526E] shrink-0" />
+                                : <span className="w-2 h-2 rounded-full border border-dashed border-[#6B778C] shrink-0 inline-block" />
+                            }
+                            <span className={`text-xs font-bold uppercase tracking-wide truncate flex-1 text-left ${
+                              group.isPinnedGroup ? 'text-[#0052CC]'
+                              : group.classId === null ? 'text-[#6B778C]'
+                              : 'text-[#42526E]'
+                            }`}>
+                              {group.className}
+                            </span>
+                            <span className="text-[10px] text-[#6B778C] font-medium shrink-0">{group.students.length}</span>
+                          </button>
+                        )}
+                        {!isCollapsed && group.students.map(student => {
+                          const isSelected = selectedStudentId === student.id
+                          const isNewest = student.id === newestStudentId
+                          const isPinned = localPinnedIds.has(student.id)
+                          return (
+                            <div
+                              key={student.id}
+                              onClick={() => setSelectedStudentId(student.id)}
+                              className={`group/row flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer transition-colors ${
+                                isSelected
+                                  ? 'bg-[#DEEBFF] border border-blue-200'
+                                  : 'hover:bg-[#F4F5F7] border border-transparent'
+                              } ${isNewest ? 'event-new' : ''}`}
+                            >
+                              <Avatar
+                                firstName={student.first_name}
+                                lastName={student.last_name}
+                                avatarUrl={student.avatar_url}
+                                size={30}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-xs font-bold truncate ${isSelected ? 'text-[#0052CC]' : 'text-[#172B4D]'}`}>
+                                  {student.first_name} {student.last_name}
+                                </p>
+                                <p className="text-xs text-[#6B778C]">
+                                  {student.event_count} {student.event_count === 1 ? 'event' : 'events'}
+                                </p>
+                              </div>
+                              {/* Pin button */}
+                              <button
+                                onClick={e => { e.stopPropagation(); handlePinToggle(student.id) }}
+                                title={isPinned ? 'Unpin' : 'Pin to top'}
+                                className={`shrink-0 p-0.5 rounded transition-all ${
+                                  isPinned
+                                    ? 'opacity-100 text-[#0052CC] hover:text-blue-700'
+                                    : 'opacity-0 group-hover/row:opacity-100 text-[#6B778C] hover:text-[#0052CC]'
+                                }`}
+                              >
+                                {isPinned ? <PinOff size={11} /> : <Pin size={11} />}
+                              </button>
+                              <ReportStatusDot status={localReportStatuses[student.id]} />
                             </div>
-                            <ReportStatusDot status={localReportStatuses[student.id]} />
-                          </div>
-                        )
-                      })}
-                    </Fragment>
-                  ))}
+                          )
+                        })}
+                      </Fragment>
+                    )
+                  })}
                 </div>
               )}
             </div>

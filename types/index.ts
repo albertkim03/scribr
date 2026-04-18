@@ -17,6 +17,7 @@ export interface Student {
   profile_notes: string
   class_id: string | null
   avatar_url?: string | null
+  is_pinned?: boolean
   created_at: string
 }
 

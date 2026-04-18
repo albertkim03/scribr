@@ -271,8 +271,20 @@ export default function AddEventModal({
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
-    // Store the date at local noon to avoid timezone-crossing issues
-    const created_at = new Date(date + 'T12:00:00').toISOString()
+    // For new events today: use the actual current time so sort order is preserved.
+    // For new events on a past/future date, or edits where the date changed: use noon of that date.
+    // For edits where the date didn't change: keep the original timestamp.
+    let created_at: string
+    if (existingEvent) {
+      const originalDate = isoToLocalDate(existingEvent.created_at)
+      created_at = originalDate === date
+        ? existingEvent.created_at
+        : new Date(date + 'T12:00:00').toISOString()
+    } else {
+      created_at = date === todayISO()
+        ? new Date().toISOString()
+        : new Date(date + 'T12:00:00').toISOString()
+    }
 
     const payload = {
       student_id: studentId,

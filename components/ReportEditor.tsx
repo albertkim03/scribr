@@ -8,7 +8,11 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import { createClient } from '@/lib/supabase/client'
-import { Clipboard, Printer, Loader2, Check, X as XIcon, Sparkles, Circle, CheckCircle2 } from 'lucide-react'
+import {
+  Clipboard, Printer, Loader2, Check, X as XIcon, Sparkles,
+  Circle, CheckCircle2, Bold, Italic, Underline as UnderlineIcon,
+  Strikethrough, List, ListOrdered,
+} from 'lucide-react'
 
 interface Props {
   studentName: string
@@ -98,21 +102,14 @@ const HoveredNodeExtension = Extension.create({
             mousemove(view, event) {
               const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })
               if (!pos) {
-                if (lastFrom !== -1) {
-                  lastFrom = -1
-                  view.dispatch(view.state.tr.setMeta(hoveredNodeKey, null))
-                }
+                if (lastFrom !== -1) { lastFrom = -1; view.dispatch(view.state.tr.setMeta(hoveredNodeKey, null)) }
                 return false
               }
               const $pos = view.state.doc.resolve(pos.pos)
               let from = -1, to = -1
               for (let d = $pos.depth; d > 0; d--) {
                 const node = $pos.node(d)
-                if (node.isBlock) {
-                  from = $pos.before(d)
-                  to = from + node.nodeSize
-                  break
-                }
+                if (node.isBlock) { from = $pos.before(d); to = from + node.nodeSize; break }
               }
               if (from === -1 || from === lastFrom) return false
               lastFrom = from
@@ -120,10 +117,7 @@ const HoveredNodeExtension = Extension.create({
               return false
             },
             mouseleave(view) {
-              if (lastFrom !== -1) {
-                lastFrom = -1
-                view.dispatch(view.state.tr.setMeta(hoveredNodeKey, null))
-              }
+              if (lastFrom !== -1) { lastFrom = -1; view.dispatch(view.state.tr.setMeta(hoveredNodeKey, null)) }
               return false
             },
           },
@@ -132,6 +126,36 @@ const HoveredNodeExtension = Extension.create({
     ]
   },
 })
+
+// ── Toolbar helpers ───────────────────────────────────────────
+function ToolbarBtn({
+  onClick, active, title, children,
+}: {
+  onClick: () => void
+  active?: boolean
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onMouseDown={e => e.preventDefault()} // keep editor focus
+      onClick={onClick}
+      title={title}
+      className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+        active
+          ? 'bg-[#0052CC]/10 text-[#0052CC]'
+          : 'text-[#42526E] hover:bg-[#F4F5F7] hover:text-[#172B4D]'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function TBDivider() {
+  return <div className="w-px h-4 bg-[#DFE1E6] mx-0.5 shrink-0" />
+}
 
 export default function ReportEditor({
   initialContent,
@@ -151,14 +175,15 @@ export default function ReportEditor({
     onStatusChanged?.(newIsDraft)
     await supabase.from('reports').update({ is_draft: newIsDraft }).eq('id', reportId)
   }
+
   const [refactoringLabel, setRefactoringLabel] = useState<string | null>(null)
   const [refactorError, setRefactorError] = useState('')
   const [bubbleMenuRect, setBubbleMenuRect] = useState<DOMRect | null>(null)
   const [pendingRefactor, setPendingRefactor] = useState<PendingRefactor | null>(null)
   const [acceptedFlash, setAcceptedFlash] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [, forceUpdate] = useState(0) // used to re-render when editor state changes (toolbar active states)
 
-  // Custom instruction state
   const [showCustomInput, setShowCustomInputState] = useState(false)
   const [customInstruction, setCustomInstruction] = useState('')
   const showCustomInputRef = useRef(false)
@@ -182,7 +207,6 @@ export default function ReportEditor({
     setBubbleMenuRect(null)
   }
 
-  // Close custom input on window blur or tab hide (prevents stuck state on alt-tab)
   useEffect(() => {
     function handleHide() {
       if (showCustomInputRef.current) {
@@ -201,7 +225,6 @@ export default function ReportEditor({
     }
   }, [])
 
-  // Close bubble menu when clicking outside it
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
       if (!bubbleMenuRef.current) return
@@ -221,7 +244,6 @@ export default function ReportEditor({
 
   useEffect(() => {
     function handleSelectionChange() {
-      // Don't clear menu when custom input is open
       if (showCustomInputRef.current) return
       const sel = window.getSelection()
       if (!sel || sel.isCollapsed || !sel.rangeCount || !editorContainerRef.current) {
@@ -258,15 +280,9 @@ export default function ReportEditor({
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      // Disable code/codeBlock — they capture ⌥⌘C / ⌥⌘E on Mac which is disruptive in a prose editor
-      // Disable bullet/ordered lists — this is a prose report editor; "- " input rule caused text loss
-      StarterKit.configure({
-        code: false,
-        codeBlock: false,
-        bulletList: false,
-        orderedList: false,
-        listItem: false,
-      }),
+      // Disable code/codeBlock — they capture ⌥⌘C / ⌥⌘E on Mac
+      // StarterKit v3 already includes Underline, Heading, BulletList, OrderedList
+      StarterKit.configure({ code: false, codeBlock: false }),
       Placeholder.configure({
         placeholder: 'Start typing your report here, or use the Regenerate button above…',
       }),
@@ -276,6 +292,12 @@ export default function ReportEditor({
     content: initialContent,
     onUpdate: ({ editor }) => {
       debouncedSave(editor.getHTML())
+    },
+    onSelectionUpdate: () => {
+      forceUpdate(n => n + 1) // refresh toolbar active states
+    },
+    onTransaction: () => {
+      forceUpdate(n => n + 1)
     },
   })
 
@@ -314,13 +336,11 @@ export default function ReportEditor({
     const trimmed = customInstruction.trim()
     if (!trimmed || !savedSelectionRef.current) return
     const saved = savedSelectionRef.current
-
     setShowCustomInput(false)
     setCustomInstruction('')
     savedSelectionRef.current = null
     savedRectRef.current = null
     setBubbleMenuRect(null)
-
     await handleRefactor(trimmed, 'Custom', saved)
   }
 
@@ -328,18 +348,11 @@ export default function ReportEditor({
     if (!editor || !pendingRefactor) return
     const { from, to, suggested } = pendingRefactor
     editor.chain().focus().deleteRange({ from, to }).insertContentAt(from, suggested).run()
-
-    // Dispatch flash decoration
     const newTo = from + suggested.length
-    editor.view.dispatch(
-      editor.view.state.tr.setMeta(refactorFlashKey, { from, to: newTo })
-    )
+    editor.view.dispatch(editor.view.state.tr.setMeta(refactorFlashKey, { from, to: newTo }))
     setTimeout(() => {
-      if (!editor.isDestroyed) {
-        editor.view.dispatch(editor.view.state.tr.setMeta(refactorFlashKey, 'clear'))
-      }
+      if (!editor.isDestroyed) editor.view.dispatch(editor.view.state.tr.setMeta(refactorFlashKey, 'clear'))
     }, 5000)
-
     setPendingRefactor(null)
     setAcceptedFlash(true)
     setTimeout(() => setAcceptedFlash(false), 1200)
@@ -356,10 +369,19 @@ export default function ReportEditor({
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* Toolbar */}
+      {/* Inject heading/list styles at runtime — guarantees they apply regardless of build cache */}
+      <style>{`
+        .tiptap-editor .ProseMirror h1{font-size:1.5rem;font-weight:800;color:#172B4D;margin-bottom:.5em;margin-top:.25em}
+        .tiptap-editor .ProseMirror h2{font-size:1.15rem;font-weight:700;color:#172B4D;margin-bottom:.5em;margin-top:.25em}
+        .tiptap-editor .ProseMirror h3{font-size:1rem;font-weight:700;color:#172B4D;margin-bottom:.5em}
+        .tiptap-editor .ProseMirror ul{list-style-type:disc;padding-left:1.5rem;margin-bottom:.75em}
+        .tiptap-editor .ProseMirror ol{list-style-type:decimal;padding-left:1.5rem;margin-bottom:.75em}
+        .tiptap-editor .ProseMirror li{margin-bottom:.25em;padding-left:.25rem}
+        .tiptap-editor .ProseMirror li>p{margin-bottom:.25em}
+      `}</style>
+      {/* Top action bar */}
       <div className="flex items-center justify-between gap-4 mb-3 no-print flex-wrap shrink-0">
         <div className="flex items-center gap-2">
-          {/* Status toggle */}
           <button
             onClick={toggleStatus}
             title={isDraft ? 'Mark as complete' : 'Mark as draft'}
@@ -369,10 +391,7 @@ export default function ReportEditor({
                 : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
             }`}
           >
-            {!isDraft
-              ? <><CheckCircle2 size={11} /> Complete</>
-              : <><Circle size={11} /> Draft</>
-            }
+            {!isDraft ? <><CheckCircle2 size={11} /> Complete</> : <><Circle size={11} /> Draft</>}
           </button>
           <span className={`text-xs font-medium transition-colors ${
             saveStatus === 'saving' ? 'text-[#0052CC]'
@@ -380,9 +399,7 @@ export default function ReportEditor({
             : 'text-[#6B778C]'
           }`}>
             {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Unsaved'}
-            <span className="text-[#6B778C] font-normal hidden sm:inline">
-              {' '}· Select any text to rewrite with AI
-            </span>
+            <span className="text-[#6B778C] font-normal hidden sm:inline"> · Select text to rewrite with AI</span>
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -404,9 +421,7 @@ export default function ReportEditor({
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-purple-200 rounded-lg text-xs font-bold hover:border-purple-400 hover:shadow-sm transition-all btn-press"
             >
               <Sparkles size={12} className="text-violet-500" />
-              <span className="bg-gradient-to-r from-violet-500 via-blue-500 to-cyan-500 bg-clip-text text-transparent">
-                Regenerate
-              </span>
+              <span className="bg-gradient-to-r from-violet-500 via-blue-500 to-cyan-500 bg-clip-text text-transparent">Regenerate</span>
             </button>
           )}
         </div>
@@ -415,20 +430,15 @@ export default function ReportEditor({
       {refactorError && (
         <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between no-print">
           {refactorError}
-          <button onClick={() => setRefactorError('')} className="ml-2 text-red-400 hover:text-red-600">
-            <XIcon size={14} />
-          </button>
+          <button onClick={() => setRefactorError('')} className="ml-2 text-red-400 hover:text-red-600"><XIcon size={14} /></button>
         </div>
       )}
 
-      {/* Before / after diff panel */}
       {pendingRefactor && (
         <div className="mb-3 rounded-xl border border-[#DFE1E6] overflow-hidden shadow-md no-print">
           <div className="bg-[#172B4D] px-4 py-2 flex items-center gap-2">
             <Sparkles size={12} className="text-blue-300" />
-            <span className="text-xs font-bold text-white tracking-wide">
-              AI suggestion — review before applying
-            </span>
+            <span className="text-xs font-bold text-white tracking-wide">AI suggestion — review before applying</span>
           </div>
           <div className="grid grid-cols-2 divide-x divide-[#DFE1E6]">
             <div className="p-4 bg-red-50">
@@ -441,16 +451,10 @@ export default function ReportEditor({
             </div>
           </div>
           <div className="flex items-center gap-2 px-4 py-3 bg-[#F4F5F7] border-t border-[#DFE1E6]">
-            <button
-              onClick={handleAcceptRefactor}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors btn-press"
-            >
+            <button onClick={handleAcceptRefactor} className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors btn-press">
               <Check size={12} /> Accept
             </button>
-            <button
-              onClick={() => setPendingRefactor(null)}
-              className="flex items-center gap-1.5 px-4 py-1.5 border border-[#DFE1E6] text-[#42526E] rounded-lg text-xs font-bold hover:bg-white transition-colors btn-press-subtle"
-            >
+            <button onClick={() => setPendingRefactor(null)} className="flex items-center gap-1.5 px-4 py-1.5 border border-[#DFE1E6] text-[#42526E] rounded-lg text-xs font-bold hover:bg-white transition-colors btn-press-subtle">
               <XIcon size={12} /> Reject
             </button>
           </div>
@@ -469,7 +473,6 @@ export default function ReportEditor({
           }}
         >
           <div className="bg-white border border-[#DFE1E6] rounded-xl shadow-lg overflow-hidden" style={{ minWidth: '220px' }}>
-            {/* Preset option buttons — always visible */}
             <div className="p-1.5 flex flex-wrap gap-1">
               {REFACTOR_OPTIONS.map(opt => (
                 <button
@@ -480,16 +483,11 @@ export default function ReportEditor({
                   className="px-2.5 py-1.5 text-xs text-[#172B4D] rounded-lg border border-[#DFE1E6] hover:bg-[#F4F5F7] hover:border-[#0052CC]/40 disabled:opacity-50 transition-colors whitespace-nowrap font-medium"
                 >
                   {refactoringLabel === opt.label ? (
-                    <span className="flex items-center gap-1">
-                      <Loader2 size={10} className="animate-spin text-[#0052CC]" />
-                      {opt.label}
-                    </span>
+                    <span className="flex items-center gap-1"><Loader2 size={10} className="animate-spin text-[#0052CC]" />{opt.label}</span>
                   ) : opt.label}
                 </button>
               ))}
             </div>
-
-            {/* Custom row — toggles between a trigger button and an inline input */}
             <div className="border-t border-[#DFE1E6] p-1.5">
               {showCustomInput ? (
                 <div className="flex items-center gap-1">
@@ -504,24 +502,11 @@ export default function ReportEditor({
                     placeholder="Your instruction…"
                     className="flex-1 min-w-0 px-2.5 py-1.5 text-xs border border-[#DFE1E6] rounded-lg text-[#172B4D] placeholder-[#6B778C] focus:outline-none focus:ring-2 focus:ring-[#0052CC] focus:border-transparent"
                   />
-                  <button
-                    onMouseDown={e => e.preventDefault()}
-                    onClick={handleCustomRefactor}
-                    disabled={!customInstruction.trim()}
-                    title="Send"
-                    className="shrink-0 flex items-center justify-center gap-1 px-2 py-1.5 text-xs bg-white border border-purple-200 rounded-lg font-bold hover:border-purple-400 disabled:opacity-40 transition-colors btn-press"
-                  >
+                  <button onMouseDown={e => e.preventDefault()} onClick={handleCustomRefactor} disabled={!customInstruction.trim()} title="Send" className="shrink-0 flex items-center justify-center gap-1 px-2 py-1.5 text-xs bg-white border border-purple-200 rounded-lg font-bold hover:border-purple-400 disabled:opacity-40 transition-colors btn-press">
                     <Sparkles size={10} className="text-violet-500" />
-                    <span className="bg-gradient-to-r from-violet-500 via-blue-500 to-cyan-500 bg-clip-text text-transparent">
-                      Send
-                    </span>
+                    <span className="bg-gradient-to-r from-violet-500 via-blue-500 to-cyan-500 bg-clip-text text-transparent">Send</span>
                   </button>
-                  <button
-                    onMouseDown={e => e.preventDefault()}
-                    onClick={closeCustomInput}
-                    title="Cancel"
-                    className="shrink-0 p-1.5 text-[#6B778C] hover:text-[#172B4D] hover:bg-[#F4F5F7] rounded-lg transition-colors"
-                  >
+                  <button onMouseDown={e => e.preventDefault()} onClick={closeCustomInput} title="Cancel" className="shrink-0 p-1.5 text-[#6B778C] hover:text-[#172B4D] hover:bg-[#F4F5F7] rounded-lg transition-colors">
                     <XIcon size={13} />
                   </button>
                 </div>
@@ -549,13 +534,43 @@ export default function ReportEditor({
         </div>
       )}
 
-      {/* Editor — Notion-like clean design */}
+      {/* Editor card */}
       <div
         ref={editorContainerRef}
         className={`bg-white rounded-xl border shadow-sm tiptap-editor print-content transition-all ${
           acceptedFlash ? 'refactor-accepted' : ''
         } border-[#E8EAF0]`}
       >
+        {/* ── Formatting toolbar — always visible, editor content scrolls below ── */}
+        <div className="flex items-center gap-0.5 px-2.5 py-2 border-b border-[#E8EAF0] bg-[#FAFBFF] shrink-0 flex-wrap rounded-t-xl no-print sticky top-0 z-10">
+          <ToolbarBtn onClick={() => editor?.chain().focus().toggleBold().run()} active={editor?.isActive('bold')} title="Bold (⌘B)">
+            <Bold size={13} />
+          </ToolbarBtn>
+          <ToolbarBtn onClick={() => editor?.chain().focus().toggleItalic().run()} active={editor?.isActive('italic')} title="Italic (⌘I)">
+            <Italic size={13} />
+          </ToolbarBtn>
+          <ToolbarBtn onClick={() => editor?.chain().focus().toggleUnderline().run()} active={editor?.isActive('underline')} title="Underline (⌘U)">
+            <UnderlineIcon size={13} />
+          </ToolbarBtn>
+          <ToolbarBtn onClick={() => editor?.chain().focus().toggleStrike().run()} active={editor?.isActive('strike')} title="Strikethrough">
+            <Strikethrough size={13} />
+          </ToolbarBtn>
+          <TBDivider />
+          <ToolbarBtn onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()} active={editor?.isActive('heading', { level: 1 })} title="Heading 1">
+            <span className="text-[11px] font-black leading-none">H1</span>
+          </ToolbarBtn>
+          <ToolbarBtn onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()} active={editor?.isActive('heading', { level: 2 })} title="Heading 2">
+            <span className="text-[11px] font-black leading-none">H2</span>
+          </ToolbarBtn>
+          <TBDivider />
+          <ToolbarBtn onClick={() => editor?.chain().focus().toggleBulletList().run()} active={editor?.isActive('bulletList')} title="Bullet list">
+            <List size={13} />
+          </ToolbarBtn>
+          <ToolbarBtn onClick={() => editor?.chain().focus().toggleOrderedList().run()} active={editor?.isActive('orderedList')} title="Numbered list">
+            <ListOrdered size={13} />
+          </ToolbarBtn>
+        </div>
+
         <EditorContent editor={editor} />
       </div>
     </div>
