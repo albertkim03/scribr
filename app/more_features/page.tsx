@@ -2,7 +2,6 @@ export default function MoreFeaturesPage() {
 	
 	return (
 		<div className="flex items-center justify-center h-screen flex-col gap-4">
-
 			<p>
 				if you have any cool ideas or found any bugs, email me:
 				<br />

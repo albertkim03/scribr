@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, Fragment } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -70,10 +71,11 @@ interface Props {
 }
 
 // ── Inline report panel (lazy-fetches report on mount) ──────────
-function InlineReportPanel({ student, subjects, profileNotes }: {
+function InlineReportPanel({ student, subjects, profileNotes, onReportStatusChanged }: {
   student: StudentWithStats
   subjects: Subject[]
   profileNotes: string
+  onReportStatusChanged?: (isDraft: boolean) => void
 }) {
   const supabase = createClient()
   const [report, setReport] = useState<Report | null | undefined>(undefined)
@@ -104,6 +106,7 @@ function InlineReportPanel({ student, subjects, profileNotes }: {
         events={student.events}
         subjects={subjects}
         profileNotes={profileNotes}
+        onReportStatusChanged={onReportStatusChanged}
       />
     </div>
   )
@@ -173,12 +176,15 @@ function ProfileNotesEditor({ studentId, initialNotes, onSave }: {
   )
 }
 
-// ── Report status dot with fast custom tooltip ──────────────────
+// ── Report status dot with portal tooltip (below icon, no overflow clipping) ──
 function ReportStatusDot({ status }: { status: boolean | undefined }) {
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+
   const label =
-    status === undefined ? 'No report generated'
+    status === undefined ? 'No report'
     : status === true    ? 'Draft'
-    :                      'Completed'
+    :                      'Complete'
 
   const icon =
     status === undefined ? (
@@ -190,17 +196,29 @@ function ReportStatusDot({ status }: { status: boolean | undefined }) {
     )
 
   return (
-    <div className="relative group/status shrink-0">
-      {icon}
-      {/* Custom fast tooltip — no browser delay */}
+    <>
       <div
-        className="pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 z-50
-          opacity-0 group-hover/status:opacity-100 transition-opacity duration-75
-          bg-[#172B4D] text-white text-[10px] font-medium px-2 py-1 rounded whitespace-nowrap"
+        ref={ref}
+        className="shrink-0"
+        onMouseEnter={() => {
+          if (!ref.current) return
+          const rect = ref.current.getBoundingClientRect()
+          setTooltipPos({ x: rect.left + rect.width / 2, y: rect.bottom + 5 })
+        }}
+        onMouseLeave={() => setTooltipPos(null)}
       >
-        {label}
+        {icon}
       </div>
-    </div>
+      {tooltipPos && createPortal(
+        <div
+          className="fixed z-[9999] pointer-events-none bg-[#172B4D] text-white text-[10px] font-medium px-2 py-1 rounded whitespace-nowrap"
+          style={{ left: tooltipPos.x, top: tooltipPos.y, transform: 'translateX(-50%)' }}
+        >
+          {label}
+        </div>,
+        document.body
+      )}
+    </>
   )
 }
 
@@ -233,9 +251,11 @@ export default function StudentTable({ students, subjects, classes, reportStatus
   const [localClasses, setLocalClasses] = useState<Class[]>(classes)
   const [localStudents, setLocalStudents] = useState<StudentWithStats[]>(students)
   const [localSubjects, setLocalSubjects] = useState<Subject[]>(subjects)
+  const [localReportStatuses, setLocalReportStatuses] = useState<Record<string, boolean>>(reportStatuses)
   useEffect(() => { setLocalClasses(classes) }, [classes])
   useEffect(() => { setLocalStudents(students) }, [students])
   useEffect(() => { setLocalSubjects(subjects) }, [subjects])
+  useEffect(() => { setLocalReportStatuses(reportStatuses) }, [reportStatuses])
 
   // ── Animation ────────────────────────────────────────────────
   const [newestEventId, setNewestEventId] = useState<string | null>(null)
@@ -322,6 +342,11 @@ export default function StudentTable({ students, subjects, classes, reportStatus
     setSelectedStudentId(student.id)
     setNewestStudentId(student.id)
     setTimeout(() => setNewestStudentId(null), 1500)
+  }
+
+  function handleReportStatusChanged(isDraft: boolean) {
+    if (!selectedStudentId) return
+    setLocalReportStatuses(prev => ({ ...prev, [selectedStudentId]: isDraft }))
   }
 
   function handleSubjectDeleted(subjectId: string) {
@@ -531,14 +556,15 @@ export default function StudentTable({ students, subjects, classes, reportStatus
                   <button
                     key={cls.id}
                     onClick={() => toggleClass(cls.id)}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold transition-colors ${
+                    title={cls.name}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold transition-colors max-w-[7rem] ${
                       activeClassIds.has(cls.id)
                         ? 'bg-[#0052CC] text-white'
                         : 'bg-white border border-[#DFE1E6] text-[#42526E] hover:border-[#0052CC] hover:text-[#0052CC]'
                     }`}
                   >
-                    <GraduationCap size={8} />
-                    {cls.name}
+                    <GraduationCap size={8} className="shrink-0" />
+                    <span className="truncate">{cls.name}</span>
                   </button>
                 ))}
                 <button
@@ -619,7 +645,7 @@ export default function StudentTable({ students, subjects, classes, reportStatus
                                 {student.event_count} {student.event_count === 1 ? 'event' : 'events'}
                               </p>
                             </div>
-                            <ReportStatusDot status={reportStatuses[student.id]} />
+                            <ReportStatusDot status={localReportStatuses[student.id]} />
                           </div>
                         )
                       })}
@@ -672,9 +698,12 @@ export default function StudentTable({ students, subjects, classes, reportStatus
                       </p>
                       <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                         {effectiveClass && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#DEEBFF] text-[#0052CC] rounded-full text-xs font-bold">
-                            <GraduationCap size={8} />
-                            {effectiveClass.name}
+                          <span
+                            title={effectiveClass.name}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#DEEBFF] text-[#0052CC] rounded-full text-xs font-bold max-w-[8rem]"
+                          >
+                            <GraduationCap size={8} className="shrink-0" />
+                            <span className="truncate">{effectiveClass.name}</span>
                           </span>
                         )}
                         <span className="px-1.5 py-0.5 bg-slate-100 text-[#42526E] rounded-full text-xs font-medium">
@@ -793,6 +822,7 @@ export default function StudentTable({ students, subjects, classes, reportStatus
                   student={selectedStudent}
                   subjects={localSubjects}
                   profileNotes={savedNotes[selectedStudent.id] ?? selectedStudent.profile_notes ?? ''}
+                  onReportStatusChanged={handleReportStatusChanged}
                 />
               </div>
             </>

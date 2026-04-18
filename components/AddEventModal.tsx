@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { X, Plus } from 'lucide-react'
+import { X, Plus, Calendar, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import Select from './Select'
 import type { Subject, Sentiment, Event } from '@/types'
 import { markDirty } from '@/lib/route-cache'
@@ -25,6 +25,159 @@ const SENTIMENT_OPTIONS = [
   { value: 'neutral',  label: 'Neutral'  },
   { value: 'negative', label: 'Negative' },
 ]
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+const DAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
+
+function todayISO() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function isoToLocalDate(isoString: string): string {
+  const d = new Date(isoString)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// ── Date Picker ─────────────────────────────────────────────────
+function DatePicker({ value, onChange }: { value: string; onChange: (date: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [viewYear, setViewYear] = useState(() => parseInt(value.slice(0, 4)))
+  const [viewMonth, setViewMonth] = useState(() => parseInt(value.slice(5, 7)) - 1)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const today = todayISO()
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  function navigate(delta: number) {
+    let m = viewMonth + delta
+    let y = viewYear
+    if (m > 11) { m = 0; y++ }
+    if (m < 0) { m = 11; y-- }
+    setViewMonth(m)
+    setViewYear(y)
+  }
+
+  function selectDay(day: number) {
+    const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    onChange(dateStr)
+    setOpen(false)
+  }
+
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  // Adjust first day to Monday-first (Mon=0 … Sun=6)
+  const startOffset = (new Date(viewYear, viewMonth, 1).getDay() + 6) % 7
+
+  const displayDate = new Date(value + 'T00:00:00').toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  })
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3 py-2 border border-[#DFE1E6] rounded-lg text-sm bg-white hover:border-[#0052CC] focus:outline-none focus:ring-2 focus:ring-[#0052CC] transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Calendar size={13} className="text-[#6B778C] shrink-0" />
+          <span className="text-[#172B4D] font-medium">{displayDate}</span>
+          {value === today && (
+            <span className="text-[10px] text-[#0052CC] font-bold bg-[#DEEBFF] px-1.5 py-0.5 rounded-full">Today</span>
+          )}
+        </div>
+        <ChevronDown size={13} className={`text-[#6B778C] transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute z-[300] mt-1 left-0 bg-white rounded-xl border border-[#DFE1E6] shadow-2xl p-3 w-64">
+          {/* Month navigation */}
+          <div className="flex items-center justify-between mb-3">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="p-1.5 rounded-lg hover:bg-[#F4F5F7] text-[#42526E] transition-colors"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span className="text-sm font-bold text-[#172B4D]">{MONTHS[viewMonth]} {viewYear}</span>
+            <button
+              type="button"
+              onClick={() => navigate(1)}
+              className="p-1.5 rounded-lg hover:bg-[#F4F5F7] text-[#42526E] transition-colors"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+
+          {/* Day-of-week headers */}
+          <div className="grid grid-cols-7 mb-1">
+            {DAYS.map(d => (
+              <div key={d} className="text-center text-[10px] font-bold text-[#6B778C] py-1">{d}</div>
+            ))}
+          </div>
+
+          {/* Calendar grid */}
+          <div className="grid grid-cols-7 gap-y-0.5">
+            {Array.from({ length: startOffset }).map((_, i) => <div key={`e-${i}`} />)}
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const day = i + 1
+              const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+              const isSelected = dateStr === value
+              const isToday = dateStr === today
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => selectDay(day)}
+                  className={`w-full aspect-square rounded-lg text-xs font-medium flex items-center justify-center transition-colors
+                    ${isSelected
+                      ? 'bg-[#0052CC] text-white font-bold'
+                      : isToday
+                        ? 'bg-[#DEEBFF] text-[#0052CC] font-bold'
+                        : 'text-[#172B4D] hover:bg-[#F4F5F7]'
+                    }`}
+                >
+                  {day}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Today shortcut */}
+          {value !== today && (
+            <div className="mt-2.5 pt-2 border-t border-[#DFE1E6]">
+              <button
+                type="button"
+                onClick={() => {
+                  onChange(today)
+                  setOpen(false)
+                  const d = new Date()
+                  setViewYear(d.getFullYear())
+                  setViewMonth(d.getMonth())
+                }}
+                className="w-full text-xs font-bold text-[#0052CC] py-1.5 rounded-lg hover:bg-[#DEEBFF] transition-colors"
+              >
+                Jump to today
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function sortSubjects(subjects: Subject[]): Subject[] {
   return [...subjects].sort((a, b) => {
@@ -56,6 +209,9 @@ export default function AddEventModal({
     existingEvent?.subject_id ?? (sorted[0]?.id ?? '')
   )
   const [description, setDescription] = useState(existingEvent?.description ?? '')
+  const [date, setDate] = useState<string>(
+    existingEvent ? isoToLocalDate(existingEvent.created_at) : todayISO()
+  )
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -79,7 +235,6 @@ export default function AddEventModal({
   }
 
   async function handleDeleteSubject(deletedId: string) {
-    // Async DB delete — fire and forget for snappy UI
     supabase.from('subjects').delete().eq('id', deletedId).then(() => {})
     setSubjects(prev => prev.filter(s => s.id !== deletedId))
     if (subjectId === deletedId) setSubjectId('')
@@ -116,12 +271,16 @@ export default function AddEventModal({
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
+    // Store the date at local noon to avoid timezone-crossing issues
+    const created_at = new Date(date + 'T12:00:00').toISOString()
+
     const payload = {
       student_id: studentId,
       user_id: session.user.id,
       subject_id: subjectId || null,
-      sentiment: encodeSentiment(sentiment), // store as INT2 in DB
+      sentiment: encodeSentiment(sentiment),
       description: description.trim(),
+      created_at,
     }
 
     if (existingEvent) {
@@ -133,8 +292,9 @@ export default function AddEventModal({
         const updatedEvent: Event = {
           ...existingEvent,
           subject_id: subjectId || null,
-          sentiment, // use the string value from state — already the correct type
+          sentiment,
           description: description.trim(),
+          created_at,
           subjects: subjects.find(s => s.id === subjectId) ?? null,
         }
         onSaved?.(updatedEvent)
@@ -154,7 +314,7 @@ export default function AddEventModal({
       } else {
         const eventWithSubject: Event = {
           ...newEvent,
-          sentiment, // override DB int with the string from state
+          sentiment,
           subjects: subjects.find(s => s.id === subjectId) ?? null,
         }
         onSaved?.(eventWithSubject)
@@ -182,6 +342,14 @@ export default function AddEventModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Date */}
+          <div>
+            <label className="block text-xs font-semibold text-[#172B4D] mb-1.5 uppercase tracking-wide">
+              Date
+            </label>
+            <DatePicker value={date} onChange={setDate} />
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-[#172B4D] mb-1.5 uppercase tracking-wide">

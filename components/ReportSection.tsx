@@ -22,6 +22,7 @@ interface Props {
   events: Event[]
   subjects: Subject[]
   profileNotes?: string
+  onReportStatusChanged?: (isDraft: boolean) => void
 }
 
 // ── Typewriter display ─────────────────────────────────────────
@@ -107,6 +108,7 @@ export default function ReportSection({
   events,
   subjects,
   profileNotes = '',
+  onReportStatusChanged,
 }: Props) {
   const [phase, setPhase] = useState<Phase>(
     initialReport ? { type: 'editing', report: initialReport } : { type: 'empty' }
@@ -162,6 +164,7 @@ export default function ReportSection({
 
   function handleAnimationDone(text: string) {
     if (phase.type !== 'animating') return
+    onReportStatusChanged?.(true) // new reports are drafts
     setPhase({
       type: 'editing',
       report: {
@@ -257,6 +260,7 @@ export default function ReportSection({
         reportId={currentReport.id}
         isDraft={currentReport.is_draft}
         onRequestRegenerate={() => setPhase({ type: 'confirm-regenerate', report: currentReport })}
+        onStatusChanged={onReportStatusChanged}
       />
       {phase.type === 'confirm-regenerate' && (
         <RegenerateModal

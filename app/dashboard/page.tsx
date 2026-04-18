@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import StudentTable from '@/components/StudentTable'
 import { withSentiment } from '@/lib/sentiment'
+import { withGender } from '@/lib/gender'
 import type { StudentWithStats } from '@/types'
 
 export default async function DashboardPage() {
@@ -19,7 +20,7 @@ export default async function DashboardPage() {
     supabase.from('reports').select('student_id, is_draft').eq('user_id', user.id),
   ])
 
-  const students = studentsResult.data ?? []
+  const students = (studentsResult.data ?? []).map(withGender)
   const subjects = subjectsResult.data ?? []
   const events = (eventsResult.data ?? []).map(withSentiment)
   const classes = classesResult.data ?? []

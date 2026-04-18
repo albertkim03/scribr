@@ -8,6 +8,7 @@ import Select from './Select'
 import AvatarUpload from './AvatarUpload'
 import type { Gender, Class, StudentWithStats } from '@/types'
 import { markDirty } from '@/lib/route-cache'
+import { encodeGender } from '@/lib/gender'
 
 interface ExistingStudent {
   id: string
@@ -137,16 +138,19 @@ export default function AddStudentModal({
       }
     }
 
-    const basePayload = {
+    // dbPayload uses encoded INT2 gender for the database
+    const dbPayload = {
       first_name: firstName.trim(),
       last_name: lastName.trim(),
-      gender,
+      gender: encodeGender(gender), // INT2 for DB
       class_id: effectiveClassId || null,
     }
+    // uiFields uses string gender for local React state
+    const uiFields = { first_name: firstName.trim(), last_name: lastName.trim(), gender, class_id: effectiveClassId || null }
 
     if (existingStudent) {
       // ── Edit existing student ──────────────────────────────
-      const { error } = await supabase.from('students').update(basePayload).eq('id', existingStudent.id)
+      const { error } = await supabase.from('students').update(dbPayload).eq('id', existingStudent.id)
       if (error) { setError(error.message); setLoading(false); return }
 
       let avatarUrl = existingStudent.avatar_url ?? null
@@ -157,7 +161,7 @@ export default function AddStudentModal({
         }
       }
 
-      const updates = { ...basePayload, avatar_url: avatarUrl }
+      const updates = { ...uiFields, avatar_url: avatarUrl }
       onSaved?.(existingStudent.id, updates)
       markDirty('dashboard')
       router.refresh()
@@ -166,7 +170,7 @@ export default function AddStudentModal({
       // ── Create new student ─────────────────────────────────
       const { data: savedStudent, error } = await supabase
         .from('students')
-        .insert({ user_id: session.user.id, ...basePayload })
+        .insert({ user_id: session.user.id, ...dbPayload })
         .select()
         .single()
 
@@ -182,6 +186,7 @@ export default function AddStudentModal({
 
       const studentWithStats: StudentWithStats = {
         ...savedStudent,
+        gender, // override DB INT2 with string for UI
         avatar_url: avatarUrl,
         event_count: 0,
         last_event_date: null,

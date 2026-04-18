@@ -93,27 +93,64 @@ button, [role="button"] {
   outline: none;
   min-height: 0;
   overflow-y: auto;
-  padding: 1.75rem 2rem;
-  line-height: 1.6;
-  font-size: 0.875rem;
+  padding: 1.75rem 2.25rem;
+  line-height: 1.7;
+  font-size: 0.9rem;
   cursor: text;
+  color: #1a202c;
 }
 
 .tiptap-editor .ProseMirror p {
-  margin-bottom: 1em;
+  margin-bottom: 0.75em;
 }
 
 .tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
-  color: #94a3b8;
+  color: #a0aec0;
   content: attr(data-placeholder);
   float: left;
   height: 0;
   pointer-events: none;
 }
 
-/* Focused editor gets a more obvious ring */
+/* Focused editor gets a subtle blue ring */
 .tiptap-editor:focus-within {
-  box-shadow: 0 0 0 2px #0052CC;
+  box-shadow: 0 0 0 2px rgba(0, 82, 204, 0.25);
+  border-color: #b3c8ef !important;
+}
+
+/* ── Notion-like block hover ─────────────────────────────── */
+.tiptap-editor .ProseMirror > p,
+.tiptap-editor .ProseMirror > h1,
+.tiptap-editor .ProseMirror > h2,
+.tiptap-editor .ProseMirror > h3,
+.tiptap-editor .ProseMirror > blockquote {
+  border-radius: 4px;
+  transition: background 80ms ease;
+  padding: 2px 4px;
+  margin-left: -4px;
+  margin-right: -4px;
+}
+
+/* Highlighted block from ProseMirror decoration */
+.tiptap-editor .ProseMirror .notion-hovered-block {
+  background: rgba(55, 53, 47, 0.04);
+}
+
+/* Subtle left accent on hovered block */
+.tiptap-editor .ProseMirror .notion-hovered-block::before {
+  content: '';
+  position: absolute;
+  left: -1rem;
+  top: 0.25em;
+  bottom: 0.25em;
+  width: 3px;
+  background: #cbd5e0;
+  border-radius: 2px;
+}
+
+/* Paragraphs need relative positioning for the ::before handle */
+.tiptap-editor .ProseMirror > p {
+  position: relative;
 }
 
 /* ── Typewriter cursor ───────────────────────────────────── */

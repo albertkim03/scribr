@@ -4,6 +4,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { withSentiment } from '@/lib/sentiment'
+import { withGender } from '@/lib/gender'
 import ProfileNotes from '@/components/ProfileNotes'
 import TrelloEventBoard from '@/components/TrelloEventBoard'
 import ReportSection from '@/components/ReportSection'
@@ -28,7 +29,7 @@ export default async function StudentPage({ params }: Props) {
 
   if (!studentResult.data) notFound()
 
-  const student = studentResult.data
+  const student = withGender(studentResult.data)
   const events = (eventsResult.data ?? []).map(withSentiment)
   const subjects = subjectsResult.data ?? []
   const report = reportResult.data ?? null

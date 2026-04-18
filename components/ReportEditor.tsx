@@ -16,6 +16,7 @@ interface Props {
   reportId: string
   isDraft?: boolean
   onRequestRegenerate?: () => void
+  onStatusChanged?: (isDraft: boolean) => void
 }
 
 const REFACTOR_OPTIONS = [
@@ -66,11 +67,78 @@ const RefactorFlashExtension = Extension.create({
   },
 })
 
+// ── Notion-like hovered block highlight ──────────────────────
+const hoveredNodeKey = new PluginKey<DecorationSet>('hoveredNode')
+
+const HoveredNodeExtension = Extension.create({
+  name: 'hoveredNode',
+  addProseMirrorPlugins() {
+    let lastFrom = -1
+    return [
+      new Plugin({
+        key: hoveredNodeKey,
+        state: {
+          init: () => DecorationSet.empty,
+          apply(tr, set) {
+            const meta = tr.getMeta(hoveredNodeKey)
+            if (meta === null) return DecorationSet.empty
+            if (meta && typeof meta === 'object') {
+              return DecorationSet.create(tr.doc, [
+                Decoration.node(meta.from, meta.to, { class: 'notion-hovered-block' }),
+              ])
+            }
+            return set.map(tr.mapping, tr.doc)
+          },
+        },
+        props: {
+          decorations(state) {
+            return hoveredNodeKey.getState(state) ?? DecorationSet.empty
+          },
+          handleDOMEvents: {
+            mousemove(view, event) {
+              const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })
+              if (!pos) {
+                if (lastFrom !== -1) {
+                  lastFrom = -1
+                  view.dispatch(view.state.tr.setMeta(hoveredNodeKey, null))
+                }
+                return false
+              }
+              const $pos = view.state.doc.resolve(pos.pos)
+              let from = -1, to = -1
+              for (let d = $pos.depth; d > 0; d--) {
+                const node = $pos.node(d)
+                if (node.isBlock) {
+                  from = $pos.before(d)
+                  to = from + node.nodeSize
+                  break
+                }
+              }
+              if (from === -1 || from === lastFrom) return false
+              lastFrom = from
+              view.dispatch(view.state.tr.setMeta(hoveredNodeKey, { from, to }))
+              return false
+            },
+            mouseleave(view) {
+              if (lastFrom !== -1) {
+                lastFrom = -1
+                view.dispatch(view.state.tr.setMeta(hoveredNodeKey, null))
+              }
+              return false
+            },
+          },
+        },
+      }),
+    ]
+  },
+})
+
 export default function ReportEditor({
   initialContent,
   reportId,
   isDraft: initialIsDraft = true,
   onRequestRegenerate,
+  onStatusChanged,
 }: Props) {
   const supabase = createClient()
 
@@ -80,6 +148,7 @@ export default function ReportEditor({
   async function toggleStatus() {
     const newIsDraft = !isDraft
     setIsDraft(newIsDraft)
+    onStatusChanged?.(newIsDraft)
     await supabase.from('reports').update({ is_draft: newIsDraft }).eq('id', reportId)
   }
   const [refactoringLabel, setRefactoringLabel] = useState<string | null>(null)
@@ -190,11 +259,19 @@ export default function ReportEditor({
     immediatelyRender: false,
     extensions: [
       // Disable code/codeBlock — they capture ⌥⌘C / ⌥⌘E on Mac which is disruptive in a prose editor
-      StarterKit.configure({ code: false, codeBlock: false }),
+      // Disable bullet/ordered lists — this is a prose report editor; "- " input rule caused text loss
+      StarterKit.configure({
+        code: false,
+        codeBlock: false,
+        bulletList: false,
+        orderedList: false,
+        listItem: false,
+      }),
       Placeholder.configure({
         placeholder: 'Start typing your report here, or use the Regenerate button above…',
       }),
       RefactorFlashExtension,
+      HoveredNodeExtension,
     ],
     content: initialContent,
     onUpdate: ({ editor }) => {
@@ -472,22 +549,13 @@ export default function ReportEditor({
         </div>
       )}
 
-      {/* Editor */}
+      {/* Editor — Notion-like clean design */}
       <div
         ref={editorContainerRef}
-        className={`bg-white rounded-xl border-2 shadow-sm tiptap-editor print-content transition-all cursor-text ${
+        className={`bg-white rounded-xl border shadow-sm tiptap-editor print-content transition-all ${
           acceptedFlash ? 'refactor-accepted' : ''
-        } border-[#DFE1E6] hover:border-[#0052CC]/40`}
-        onClick={() => editor?.commands.focus()}
+        } border-[#E8EAF0]`}
       >
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-[#DFE1E6] bg-[#F4F5F7] no-print rounded-t-xl">
-          <div className="flex gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-          </div>
-          <span className="text-xs text-[#6B778C] font-medium">Click anywhere to edit</span>
-        </div>
         <EditorContent editor={editor} />
       </div>
     </div>

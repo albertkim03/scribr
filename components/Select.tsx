@@ -69,6 +69,7 @@ export default function Select({
               <div key={option.value + i} className={`flex items-center ${option.isAction ? 'border-t border-[#DFE1E6]' : ''}`}>
                 <button
                   type="button"
+                  title={option.label}
                   onClick={() => {
                     onChange(option.value)
                     setOpen(false)
@@ -81,7 +82,7 @@ export default function Select({
                         : 'text-[#172B4D] hover:bg-[#F4F5F7]'
                     }`}
                 >
-                  <span className="flex-1">{option.label}</span>
+                  <span className="flex-1 truncate">{option.label}</span>
                   {!option.isAction && option.value === value && (
                     <Check size={13} className="text-[#0052CC] shrink-0" />
                   )}
