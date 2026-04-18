@@ -2,6 +2,17 @@
 
 import { useEffect } from 'react'
 
+// Red variant of the ScribrLogo SVG (same shapes, red background instead of blue gradient)
+const RED_FAVICON_SVG = `<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="32" height="32" rx="8" fill="#dc2626"/>
+  <path d="M16 26 L6 14.5 L16 6 L26 14.5 Z" fill="white" fill-opacity="0.18" stroke="white" stroke-width="1.6" stroke-linejoin="round"/>
+  <line x1="16" y1="26" x2="16" y2="15.5" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
+  <circle cx="12.5" cy="14" r="1.3" fill="white" fill-opacity="0.9"/>
+  <circle cx="19.5" cy="14" r="1.3" fill="white" fill-opacity="0.9"/>
+</svg>`
+
+const RED_FAVICON_HREF = `data:image/svg+xml,${encodeURIComponent(RED_FAVICON_SVG)}`
+
 export default function LocalhostFavicon() {
   useEffect(() => {
     const isLocalhost =
@@ -10,47 +21,13 @@ export default function LocalhostFavicon() {
       window.location.hostname === '::1'
     if (!isLocalhost) return
 
-    function applyRedFavicon(href: string) {
-      // Remove all existing favicon links to force the browser to re-pick
-      document.querySelectorAll('link[rel*="icon"]').forEach(el => el.remove())
-      const link = document.createElement('link')
-      link.rel = 'icon'
-      link.href = href
-      document.head.appendChild(link)
-    }
-
-    fetch('/favicon.ico')
-      .then(r => r.blob())
-      .then(blob => {
-        // Draw via blob URL — canvas always trusts blob: URLs, no CORS issue
-        const blobUrl = URL.createObjectURL(blob)
-        const img = new Image()
-        img.onload = () => {
-          const size = Math.max(img.naturalWidth, img.naturalHeight) || 32
-          const canvas = document.createElement('canvas')
-          canvas.width = size
-          canvas.height = size
-          const ctx = canvas.getContext('2d')!
-          ctx.drawImage(img, 0, 0, size, size)
-          ctx.globalCompositeOperation = 'source-atop'
-          ctx.fillStyle = 'rgba(220, 38, 38, 0.85)'
-          ctx.fillRect(0, 0, size, size)
-          URL.revokeObjectURL(blobUrl)
-          applyRedFavicon(canvas.toDataURL('image/png'))
-        }
-        img.onerror = () => {
-          URL.revokeObjectURL(blobUrl)
-          applyRedFallback()
-        }
-        img.src = blobUrl
-      })
-      .catch(applyRedFallback)
-
-    function applyRedFallback() {
-      // Plain red circle so localhost is always visually distinct
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="#dc2626"/><text x="16" y="21" text-anchor="middle" font-size="14" font-family="sans-serif" fill="white" font-weight="bold">L</text></svg>`
-      applyRedFavicon(`data:image/svg+xml,${encodeURIComponent(svg)}`)
-    }
+    // Remove all existing favicon links so the browser picks up the new one
+    document.querySelectorAll('link[rel*="icon"]').forEach(el => el.remove())
+    const link = document.createElement('link')
+    link.rel = 'icon'
+    link.type = 'image/svg+xml'
+    link.href = RED_FAVICON_HREF
+    document.head.appendChild(link)
   }, [])
 
   return null
