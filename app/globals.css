@@ -86,6 +86,7 @@ button, [role="button"] {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .tiptap-editor .ProseMirror {
@@ -95,7 +96,7 @@ button, [role="button"] {
   overflow-y: auto;
   padding: 1.75rem 2.25rem;
   line-height: 1.7;
-  font-size: 0.9rem;
+  font-size: var(--tiptap-font-size, 0.9rem);
   cursor: text;
   color: #1a202c;
 }
@@ -236,6 +237,29 @@ button, [role="button"] {
 .auth-bg {
   background: linear-gradient(145deg, #060E1C 0%, #0A1F4A 35%, #0F3482 65%, #1B5BE8 100%);
   min-height: 100vh;
+}
+
+/* ── Optimistic deletion animations ─────────────────────── */
+@keyframes row-leaving {
+  0%   { opacity: 1; transform: translateX(0);    max-height: 80px;  }
+  40%  { opacity: 0; transform: translateX(-8px); max-height: 80px;  }
+  100% { opacity: 0; transform: translateX(-8px); max-height: 0; padding-top: 0; padding-bottom: 0; margin: 0; }
+}
+.row-leaving {
+  animation: row-leaving 220ms ease-in forwards;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+@keyframes card-leaving {
+  0%   { opacity: 1; transform: scale(1);    max-height: 200px; }
+  40%  { opacity: 0; transform: scale(0.95); max-height: 200px; }
+  100% { opacity: 0; transform: scale(0.95); max-height: 0; padding-top: 0; padding-bottom: 0; margin: 0; }
+}
+.card-leaving {
+  animation: card-leaving 220ms ease-in forwards;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 /* ── Print ───────────────────────────────────────────────── */

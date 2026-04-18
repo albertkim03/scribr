@@ -244,8 +244,8 @@ export default function StudentTable({ students, subjects, classes, reportStatus
   const [addEventStudent, setAddEventStudent] = useState<StudentWithStats | null>(null)
   const [editingEvent, setEditingEvent] = useState<{ event: Event; student: StudentWithStats } | null>(null)
   const [editingStudent, setEditingStudent] = useState<StudentWithStats | null>(null)
-  const [deletingEventId, setDeletingEventId] = useState<string | null>(null)
-  const [deletingStudentId, setDeletingStudentId] = useState<string | null>(null)
+  const [leavingEventIds, setLeavingEventIds] = useState<Set<string>>(new Set())
+  const [leavingStudentIds, setLeavingStudentIds] = useState<Set<string>>(new Set())
   const [confirmModal, setConfirmModal] = useState<{ message: string; confirmLabel?: string; onConfirm: () => void } | null>(null)
 
   // ── Local mutable copies ─────────────────────────────────────
@@ -428,13 +428,20 @@ export default function StudentTable({ students, subjects, classes, reportStatus
     setConfirmModal({
       message: 'Delete this event? This cannot be undone.',
       confirmLabel: 'Delete',
-      onConfirm: async () => {
+      onConfirm: () => {
         setConfirmModal(null)
-        setDeletingEventId(eventId)
-        await supabase.from('events').delete().eq('id', eventId)
-        setDeletingEventId(null)
-        markDirty('dashboard')
-        router.refresh()
+        setLeavingEventIds(prev => new Set([...prev, eventId]))
+        setTimeout(() => {
+          setLocalStudents(prev => prev.map(s => {
+            if (!s.events.some(ev => ev.id === eventId)) return s
+            return { ...s, events: s.events.filter(ev => ev.id !== eventId), event_count: s.event_count - 1 }
+          }))
+          setLeavingEventIds(prev => { const next = new Set(prev); next.delete(eventId); return next })
+          supabase.from('events').delete().eq('id', eventId).then(() => {
+            markDirty('dashboard')
+            router.refresh()
+          })
+        }, 220)
       },
     })
   }
@@ -443,14 +450,18 @@ export default function StudentTable({ students, subjects, classes, reportStatus
     setConfirmModal({
       message: `Delete ${name}? This will permanently remove all their events and report.`,
       confirmLabel: 'Delete',
-      onConfirm: async () => {
+      onConfirm: () => {
         setConfirmModal(null)
-        setDeletingStudentId(studentId)
-        await supabase.from('students').delete().eq('id', studentId)
-        setDeletingStudentId(null)
         if (selectedStudentId === studentId) setSelectedStudentId(null)
-        markDirty('dashboard')
-        router.refresh()
+        setLeavingStudentIds(prev => new Set([...prev, studentId]))
+        setTimeout(() => {
+          setLocalStudents(prev => prev.filter(s => s.id !== studentId))
+          setLeavingStudentIds(prev => { const next = new Set(prev); next.delete(studentId); return next })
+          supabase.from('students').delete().eq('id', studentId).then(() => {
+            markDirty('dashboard')
+            router.refresh()
+          })
+        }, 220)
       },
     })
   }
@@ -683,6 +694,7 @@ export default function StudentTable({ students, subjects, classes, reportStatus
                         {!isCollapsed && group.students.map(student => {
                           const isSelected = selectedStudentId === student.id
                           const isNewest = student.id === newestStudentId
+                          const isLeaving = leavingStudentIds.has(student.id)
                           const isPinned = localPinnedIds.has(student.id)
                           return (
                             <div
@@ -692,7 +704,7 @@ export default function StudentTable({ students, subjects, classes, reportStatus
                                 isSelected
                                   ? 'bg-[#DEEBFF] border border-blue-200'
                                   : 'hover:bg-[#F4F5F7] border border-transparent'
-                              } ${isNewest ? 'event-new' : ''}`}
+                              } ${isNewest ? 'event-new' : ''} ${isLeaving ? 'row-leaving' : ''}`}
                             >
                               <Avatar
                                 firstName={student.first_name}
@@ -798,14 +810,10 @@ export default function StudentTable({ students, subjects, classes, reportStatus
                       </button>
                       <button
                         onClick={() => handleDeleteStudent(selectedStudent.id, `${selectedStudent.first_name} ${selectedStudent.last_name}`)}
-                        disabled={deletingStudentId === selectedStudent.id}
                         title="Delete student"
-                        className="p-1.5 text-[#6B778C] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40"
+                        className="p-1.5 text-[#6B778C] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                       >
-                        {deletingStudentId === selectedStudent.id
-                          ? <Loader2 size={13} className="animate-spin" />
-                          : <Trash2 size={13} />
-                        }
+                        <Trash2 size={13} />
                       </button>
                       <button
                         onClick={() => setEventsOpen(false)}
@@ -851,11 +859,12 @@ export default function StudentTable({ students, subjects, classes, reportStatus
                       const { Icon: SentimentIcon } = SENTIMENT_CONFIG[event.sentiment]
                       const cardStyle = SENTIMENT_CARD[event.sentiment]
                       const isNew = event.id === newestEventId
+                      const isLeaving = leavingEventIds.has(event.id)
                       return (
                         <div
                           key={event.id}
                           onClick={() => setEditingEvent({ event, student: selectedStudent })}
-                          className={`relative rounded-lg border p-2.5 cursor-pointer hover:shadow-sm transition-all ${cardStyle.bg} ${cardStyle.border} ${isNew ? 'event-new' : ''}`}
+                          className={`relative rounded-lg border p-2.5 cursor-pointer hover:shadow-sm transition-all ${cardStyle.bg} ${cardStyle.border} ${isNew ? 'event-new' : ''} ${isLeaving ? 'card-leaving' : ''}`}
                         >
                           <SentimentIcon size={10} className={`absolute top-2 right-2 ${cardStyle.iconClass} opacity-60`} />
                           {event.subjects && (
@@ -869,13 +878,9 @@ export default function StudentTable({ students, subjects, classes, reportStatus
                             <p className="text-xs text-[#6B778C]">{formatDate(event.created_at)}</p>
                             <button
                               onClick={e => handleDeleteEvent(e, event.id)}
-                              disabled={deletingEventId === event.id}
-                              className="p-1 text-[#6B778C] hover:text-red-600 hover:bg-red-50/80 rounded transition-colors disabled:opacity-40"
+                              className="p-1 text-[#6B778C] hover:text-red-600 hover:bg-red-50/80 rounded transition-colors"
                             >
-                              {deletingEventId === event.id
-                                ? <Loader2 size={11} className="animate-spin" />
-                                : <X size={11} />
-                              }
+                              <X size={11} />
                             </button>
                           </div>
                         </div>

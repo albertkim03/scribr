@@ -11,7 +11,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   Clipboard, Printer, Loader2, Check, X as XIcon, Sparkles,
   Circle, CheckCircle2, Bold, Italic, Underline as UnderlineIcon,
-  Strikethrough, List, ListOrdered,
+  Strikethrough, List, ListOrdered, ZoomIn, ZoomOut,
 } from 'lucide-react'
 
 interface Props {
@@ -127,12 +127,16 @@ const HoveredNodeExtension = Extension.create({
   },
 })
 
+const FONT_SIZES = [0.75, 0.85, 0.9, 1.0, 1.1, 1.25, 1.4, 1.6]
+const DEFAULT_FONT_SIZE_IDX = 2 // 0.9rem
+
 // ── Toolbar helpers ───────────────────────────────────────────
 function ToolbarBtn({
-  onClick, active, title, children,
+  onClick, active, disabled, title, children,
 }: {
   onClick: () => void
   active?: boolean
+  disabled?: boolean
   title: string
   children: React.ReactNode
 }) {
@@ -141,8 +145,9 @@ function ToolbarBtn({
       type="button"
       onMouseDown={e => e.preventDefault()} // keep editor focus
       onClick={onClick}
+      disabled={disabled}
       title={title}
-      className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+      className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
         active
           ? 'bg-[#0052CC]/10 text-[#0052CC]'
           : 'text-[#42526E] hover:bg-[#F4F5F7] hover:text-[#172B4D]'
@@ -168,6 +173,7 @@ export default function ReportEditor({
 
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const [isDraft, setIsDraft] = useState<boolean>(initialIsDraft)
+  const [fontSizeIdx, setFontSizeIdx] = useState(DEFAULT_FONT_SIZE_IDX)
 
   async function toggleStatus() {
     const newIsDraft = !isDraft
@@ -540,9 +546,10 @@ export default function ReportEditor({
         className={`bg-white rounded-xl border shadow-sm tiptap-editor print-content transition-all ${
           acceptedFlash ? 'refactor-accepted' : ''
         } border-[#E8EAF0]`}
+        style={{ '--tiptap-font-size': `${FONT_SIZES[fontSizeIdx]}rem` } as React.CSSProperties}
       >
         {/* ── Formatting toolbar — always visible, editor content scrolls below ── */}
-        <div className="flex items-center gap-0.5 px-2.5 py-2 border-b border-[#E8EAF0] bg-[#FAFBFF] shrink-0 flex-wrap rounded-t-xl no-print sticky top-0 z-10">
+        <div className="flex items-center gap-0.5 px-2.5 py-2 border-b border-[#E8EAF0] bg-[#FAFBFF] shrink-0 rounded-t-xl no-print z-10">
           <ToolbarBtn onClick={() => editor?.chain().focus().toggleBold().run()} active={editor?.isActive('bold')} title="Bold (⌘B)">
             <Bold size={13} />
           </ToolbarBtn>
@@ -569,9 +576,32 @@ export default function ReportEditor({
           <ToolbarBtn onClick={() => editor?.chain().focus().toggleOrderedList().run()} active={editor?.isActive('orderedList')} title="Numbered list">
             <ListOrdered size={13} />
           </ToolbarBtn>
+          {/* Spacer pushes zoom to far right */}
+          <div className="flex-1" />
+          <TBDivider />
+          <ToolbarBtn
+            onClick={() => setFontSizeIdx(i => Math.max(0, i - 1))}
+            disabled={fontSizeIdx === 0}
+            title="Zoom out"
+          >
+            <ZoomOut size={13} />
+          </ToolbarBtn>
+          <span className="text-[10px] text-[#6B778C] font-medium w-8 text-center tabular-nums select-none">
+            {Math.round(FONT_SIZES[fontSizeIdx] * 100)}%
+          </span>
+          <ToolbarBtn
+            onClick={() => setFontSizeIdx(i => Math.min(FONT_SIZES.length - 1, i + 1))}
+            disabled={fontSizeIdx === FONT_SIZES.length - 1}
+            title="Zoom in"
+          >
+            <ZoomIn size={13} />
+          </ToolbarBtn>
         </div>
 
-        <EditorContent editor={editor} />
+        <EditorContent
+          editor={editor}
+          className="flex-1 min-h-0 flex flex-col overflow-hidden"
+        />
       </div>
     </div>
   )
