@@ -5,6 +5,7 @@ import { Sparkles } from 'lucide-react'
 import ReportEditor from './ReportEditor'
 import GenerateReportModal from './GenerateReportModal'
 import RegenerateModal from './RegenerateModal'
+import { createClient } from '@/lib/supabase/client'
 import type { Event, Report, Subject } from '@/types'
 
 type Phase =
@@ -48,8 +49,8 @@ function TypewriterDisplay({ text, onDone }: { text: string; onDone: (text: stri
   }, [plainText]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="bg-white rounded-xl border-2 border-[#0052CC] shadow-sm overflow-hidden">
-      <div className="flex items-center gap-2.5 px-4 py-2.5 bg-[#DEEBFF] border-b border-[#0052CC]/20">
+    <div className="flex-1 min-h-0 bg-white rounded-xl border-2 border-[#0052CC] shadow-sm overflow-hidden flex flex-col">
+      <div className="flex items-center gap-2.5 px-4 py-2.5 bg-[#DEEBFF] border-b border-[#0052CC]/20 shrink-0">
         <div className="flex gap-1">
           {[0, 150, 300].map(delay => (
             <span
@@ -61,7 +62,7 @@ function TypewriterDisplay({ text, onDone }: { text: string; onDone: (text: stri
         </div>
         <span className="text-xs font-bold text-[#0052CC] tracking-wide">AI is writing…</span>
       </div>
-      <div className="px-6 py-5 min-h-[200px] text-[#172B4D] leading-[1.45] whitespace-pre-wrap text-[0.875rem]">
+      <div className="flex-1 overflow-y-auto px-6 py-5 text-[#172B4D] leading-[1.45] whitespace-pre-wrap text-[0.875rem]">
         {displayed}
         <span className="typewriter-cursor" />
       </div>
@@ -72,8 +73,8 @@ function TypewriterDisplay({ text, onDone }: { text: string; onDone: (text: stri
 // ── Generating state ──────────────────────────────────────────
 function GeneratingState() {
   return (
-    <div className="bg-white rounded-xl border-2 border-purple-200 shadow-sm overflow-hidden">
-      <div className="bg-gradient-to-br from-violet-50 via-blue-50 to-cyan-50 px-6 py-10 flex flex-col items-center text-center">
+    <div className="flex-1 min-h-0 bg-white rounded-xl border-2 border-purple-200 shadow-sm overflow-hidden">
+      <div className="h-full bg-gradient-to-br from-violet-50 via-blue-50 to-cyan-50 px-6 py-10 flex flex-col items-center justify-center text-center">
         <div className="relative mb-5">
           <div className="w-14 h-14 rounded-full bg-gradient-to-br from-violet-100 to-cyan-100 flex items-center justify-center">
             <Sparkles size={22} className="text-violet-500" />
@@ -114,6 +115,22 @@ export default function ReportSection({
     initialReport ? { type: 'editing', report: initialReport } : { type: 'empty' }
   )
   const [error, setError] = useState('')
+  const [startingBlank, setStartingBlank] = useState(false)
+
+  async function handleWriteOwn() {
+    setStartingBlank(true)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setStartingBlank(false); return }
+    const now = new Date().toISOString()
+    const { data } = await supabase
+      .from('reports')
+      .insert({ student_id: studentId, user_id: user.id, content: '', is_draft: true, generated_at: now, last_edited_at: now })
+      .select()
+      .single()
+    setStartingBlank(false)
+    if (data) setPhase({ type: 'editing', report: data as Report })
+  }
 
   async function handleGenerate(selectedEventIds: string[], length: string, includeProfileNotes: boolean) {
     setPhase({ type: 'generating' })
@@ -183,7 +200,7 @@ export default function ReportSection({
   if (phase.type === 'empty') {
     return (
       <>
-        <div className="bg-white rounded-xl border border-[#DFE1E6] shadow-sm p-12 flex flex-col items-center text-center">
+        <div className="flex-1 min-h-0 bg-white rounded-xl border border-[#DFE1E6] shadow-sm flex flex-col items-center justify-center text-center px-12 py-8">
           <div className="w-14 h-14 bg-[#DEEBFF] rounded-full flex items-center justify-center mb-4">
             <Sparkles size={24} className="text-[#0052CC]" />
           </div>
@@ -206,6 +223,13 @@ export default function ReportSection({
               {events.length === 0 && !profileNotes.trim() ? 'Log events first' : 'Generate report'}
             </span>
           </button>
+          <button
+            onClick={handleWriteOwn}
+            disabled={startingBlank}
+            className="mt-3 text-xs text-[#6B778C] hover:text-[#172B4D] hover:underline disabled:opacity-40 transition-colors"
+          >
+            {startingBlank ? 'Opening editor…' : "I'd rather write it myself →"}
+          </button>
         </div>
 
         {phase.type === ('confirm-generate' as string) && null}
@@ -216,7 +240,7 @@ export default function ReportSection({
   if (phase.type === 'confirm-generate') {
     return (
       <>
-        <div className="bg-white rounded-xl border border-[#DFE1E6] shadow-sm p-12 flex flex-col items-center text-center">
+        <div className="flex-1 min-h-0 bg-white rounded-xl border border-[#DFE1E6] shadow-sm flex flex-col items-center justify-center text-center px-12 py-8">
           <Sparkles size={24} className="text-[#0052CC] mb-2" />
           <p className="text-sm text-[#42526E]">Select events below…</p>
         </div>
